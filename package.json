@@ -1,0 +1,11 @@
+{
+    "name": "Delphinium",
+    "description": "Translate ECMAScript to C, compile to executable",
+    "homepage": "https://github.com/spaceflint7/delphinium/",
+    "main": "./index.js",
+    "version": "0.1.1",
+    "license": "MIT",
+    "dependencies": {
+        "esprima-next": "^5.8.4"
+    }
+}
