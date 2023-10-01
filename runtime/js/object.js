@@ -17,7 +17,7 @@ const js_getOwnProperty = _shadow.js_getOwnProperty;
 
 function Object (val) {
 
-    if (typeof(val) === 'object')
+    if (typeof(val) === 'object' || typeof(val) === 'function')
         return val;
 
     // if called as a constructor, 'this' is already

@@ -39,7 +39,34 @@ defineNotEnum(Array_prototype, 'concat', function concat () {});
 
 defineNotEnum(Array_prototype, 'copyWithin', function copyWithin () {});
 
-defineNotEnum(Array_prototype, 'push', function push () {});
+defineNotEnum(Array_prototype, 'pop', function pop () {
+    // make sure length is a number (if possibly NaN),
+    // and raise an error if length is bigint and symbol
+    let len = +this.length;
+    let element;
+    if (len > 0) {
+        --len;
+        element = this[len];
+        delete this[len];
+    } else
+        len = 0;
+    this.length = len;
+    return element;
+});
+
+defineNotEnum(Array_prototype, 'push', function push (...elements) {
+    // make sure length is a number (if possibly NaN),
+    // and raise an error if length is bigint and symbol
+    let len = +this.length;
+    if (!(len >= 0)) // if NaN or negative number
+        len = 0;
+    let count = elements.length;
+    if (len + count > 2 ** 53 - 1)
+        _shadow.RangeError_array_length();
+    for (let index = 0; index < count; index++)
+        this[len++] = elements[index];
+    this.length = len;
+});
 
 defineNotEnum(Array_prototype, 'keys', function keys () {});
 
@@ -65,7 +92,12 @@ _shadow.isArray = function isArray (maybeArray) {
     return (js_property_flags(maybeArray, 'length') === 0x0033);
 }
 
-defineNotEnum(Array, 'isArray', _shadow.isArray);
+//
+// Array.from
+//
+
+//defineNotEnum(Array, 'from', function from (src) {
+//});
 
 //
 // [Symbol.iterator] ()

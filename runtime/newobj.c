@@ -149,31 +149,63 @@ static void js_newobj2_xetter (js_environ *env, js_val obj,
 //
 // js_newobj2_spread
 //
+// implement the spread syntax in an object expression,
+// which is a shallow clone of all enumerable own
+// properties from the spread source object
+//
+// an optional list of properties to skip is used by
+// js_restobj (), which itself implements last/rest
+// property in object destructuring, see also
+// assignment_expression () in expression_writer.js
+//
 // ------------------------------------------------------------
 
 static void js_newobj2_spread (js_environ *env,
-                               js_val dst, js_val src) {
+                               js_val dst, js_val src,
+                               js_val *skip_list) {
 
-    // implement the spread syntax in an object expression,
-    // which is a shallow clone of all enumerable own
-    // properties from the spread source object
     js_obj *src_ptr = js_get_pointer(src);
-    int64_t dummy_shape_cache;
     int index = 0;
+
+    uint32_t arr_length = 0;
+    if (js_obj_is_exotic(src_ptr, js_obj_is_array)) {
+        int64_t int_len =
+            ((js_arr *)src_ptr)->length_descr[0].num;
+        if (int_len > 0)
+            arr_length = int_len;
+    }
+
     for (;;) {
-        int64_t prop_key, idx_or_ptr;
-        if (!js_shape_get_next(src_ptr->shape,
-                               &index, &prop_key, &idx_or_ptr))
-            break;
-        if (idx_or_ptr >= 0)
-            continue;
+        js_val prop, src_value;
 
-        js_val src_value = src_ptr->values[~idx_or_ptr];
-        if (src_value.raw == js_deleted.raw)
-            continue;
+        if (likely(arr_length == 0)) {
 
-        js_val prop = js_make_primitive(
-                            prop_key, js_prim_is_string);
+            int64_t prop_key, idx_or_ptr;
+            if (!js_shape_get_next(src_ptr->shape,
+                           &index, &prop_key, &idx_or_ptr))
+                break;
+            if (idx_or_ptr >= 0)
+                continue;
+            src_value = src_ptr->values[~idx_or_ptr];
+            if (src_value.raw == js_deleted.raw)
+                continue;
+            prop = js_make_primitive(
+                        prop_key, js_prim_is_string);
+
+        } else {
+
+            uint32_t prop_idx = ((uint32_t)index) + 1;
+            src_value = js_arr_get(src, prop_idx);
+            if (++index == arr_length) {
+                index = 0;
+                arr_length = 0;
+            }
+            prop = js_str_index(env, prop_idx);
+        }
+
+        //
+        //
+        //
 
         if (js_is_descriptor(src_value)) {
             js_descriptor *descr = js_get_pointer(src_value);
@@ -183,6 +215,7 @@ static void js_newobj2_spread (js_environ *env,
             if (flags & js_descr_value)
                 src_value = descr->data_or_getter;
             else if (flags & js_descr_getter) {
+                int64_t dummy_shape_cache;
                 src_value = js_getprop(env, src, prop,
                                        &dummy_shape_cache);
             } else {
@@ -190,6 +223,21 @@ static void js_newobj2_spread (js_environ *env,
                 // is neither a value nor a getter function
                 src_value = js_undefined;
             }
+        }
+
+        if (skip_list) {    // called from js_restobj ()
+            int i = 0;
+            for (;; ++i) {
+                const js_val prop2 = skip_list[i];
+                if (!prop2.raw)
+                    break;
+                if (prop2.raw == prop.raw) {
+                    i = -1;
+                    break;
+                }
+            }
+            if (i == -1)
+                continue; // skip property in list
         }
 
         js_val *dst_value = js_ownprop(env, dst, prop, true);
@@ -236,7 +284,7 @@ js_val js_newobj2 (js_environ *env, js_val obj, js_val proto,
 
                 // special flag passed by object_expression ()
                 // to indicate spread syntax
-                js_newobj2_spread(env, obj, value);
+                js_newobj2_spread(env, obj, value, NULL);
 
             } else {
 
@@ -256,6 +304,40 @@ js_val js_newobj2 (js_environ *env, js_val obj, js_val proto,
         va_end(args);
     }
     return obj;
+}
+
+// ------------------------------------------------------------
+//
+// js_restobj
+//
+// ------------------------------------------------------------
+
+js_val js_restobj (js_environ *env, js_val from_obj,
+                   int skip_count, ...) {
+
+    js_val skip_list[skip_count];
+    js_val *skip_list_ptr;
+    if (!skip_count)
+        skip_list_ptr = NULL;
+    else {
+        va_list args;
+        va_start(args, skip_count);
+        for (int i = 0; i < skip_count; ++i) {
+            // make sure the property is interned,
+            // for comparison in js_newobj2_spread ()
+            skip_list[i] = js_make_primitive(
+                js_shape_key(env, va_arg(args, js_val)),
+                js_prim_is_string);
+        }
+        va_end(args);
+        skip_list[skip_count].raw = 0;
+        skip_list_ptr = skip_list;
+    }
+
+    js_val new_obj = js_make_object(
+            js_newexobj(env->obj_proto, env->shape_empty));
+    js_newobj2_spread(env, new_obj, from_obj, skip_list_ptr);
+    return new_obj;
 }
 
 // ------------------------------------------------------------

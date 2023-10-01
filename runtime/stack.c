@@ -103,7 +103,7 @@ js_val js_arguments (js_environ *env,
     // collect all the parameters passed to the function,
     // between 'stk_args' and the stack top pointer,
     // into a temporary array
-    js_val args_obj = js_restarr(env, stk_args);
+    js_val args_obj = js_restarr_stk(env, stk_args->next);
 
     // if function is in non-strict mode, then 'func_val'
     // was passed, and we have to update its properties
@@ -219,7 +219,7 @@ void js_spreadargs (js_environ *env, js_val iterable) {
     // fast-path if iterable is a typical fast-path array.
     //
 
-    if (js_is_object(iterable)) {
+    /*if (js_is_object(iterable)) {
 
         js_obj *obj_ptr = (js_obj *)js_get_pointer(iterable);
         uintptr_t proto = (uintptr_t)obj_ptr->proto;
@@ -240,10 +240,13 @@ void js_spreadargs (js_environ *env, js_val iterable) {
 
             return;
         }
-    }
+    }*/
 
     //
-    // otherwise take the slow-path via Symbol.iterator
+    // iterate the object via Symbol.iterator.  note that
+    // this is true for arrays, because the the iterator
+    // might be overridden on the array object itself, or
+    // on Array.prototype or even Object.prototype.
     //
 
     int64_t dummy_shape_cache;
@@ -453,7 +456,7 @@ static js_link *js_walkstack (js_link *stk_ptr) {
     for (;;) {
 
         if (!(stk_ptr = stk_ptr->prev)) {
-            fprintf(stderr, "Stack error!");
+            fprintf(stderr, "Stack error!\n");
             exit(1);
         }
 
@@ -602,6 +605,12 @@ js_val js_throw (js_environ *env, js_val throw_val) {
     // prevent the normal way that 'arguments' gets reset.
     // see also return_statement () in statement_writer.js
     for (js_link *stk_ptr = js_stk_top;;) {
+
+        if (stk_ptr == try->stack_top) {
+            js_stk_top = stk_ptr;
+            break;
+        }
+
         stk_ptr = js_walkstack(stk_ptr);
 
         const js_func *func =
@@ -616,11 +625,6 @@ js_val js_throw (js_environ *env, js_val throw_val) {
         // function object values on the stack, but it may
         // not get a chance to, due to throw; so we do it.
         stk_ptr->value = js_undefined;
-
-        if (stk_ptr == try->stack_top) {
-            js_stk_top = stk_ptr;
-            break;
-        }
     }
 
     // jump to the execution point where the 'try' was

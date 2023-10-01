@@ -83,7 +83,7 @@ exports.get_distance_from_block = function (find_node, block) {
         if (found || node === find_node)
             return (found = true);
         ++distance;
-        node.child_nodes.forEach(f);
+        exports.get_child_nodes(node).forEach(f);
     }
     f(block);
     return (found ? distance : -1);
@@ -95,3 +95,80 @@ exports.throw_unexpected_property = function (node) {
 
     throw [ node, 'unexpected property in object expression' ];
 }
+
+// ------------------------------------------------------------
+
+exports.get_child_nodes = function (node) {
+
+    //if (!get_child_nodes_keys[node.type]) console.log(node);
+    const child_nodes = [];
+    for (const key of get_child_nodes_keys[node.type]) {
+
+        const array_or_sub_node = node[key];
+
+        if (Array.isArray(array_or_sub_node)) {
+            for (const array_elem of array_or_sub_node) {
+                if (array_elem?.type)
+                    child_nodes.push(array_elem);
+            }
+
+        } else if (array_or_sub_node?.type)
+            child_nodes.push(array_or_sub_node);
+    }
+
+    return child_nodes;
+}
+
+// properties in an Esprima node that lead to other nodes
+
+var get_child_nodes_keys = {
+
+    FunctionDeclaration:        [ 'id', 'params', 'body' ],
+    VariableDeclaration:        [ 'declarations' ],
+    VariableDeclarator:         [ 'id', 'init' ],
+    ArrayPattern:               [ 'elements' ],
+    AssignmentPattern:          [ 'left', 'right' ],
+    ObjectPattern:              [ 'properties' ],
+    RestElement:                [ 'argument' ],
+
+    BlockStatement:             [ 'body' ],
+    BreakStatement:             [ 'label' ],
+    CatchClause:                [ 'param', 'body' ],
+    ContinueStatement:          [ 'label' ],
+    DoWhileStatement:           [ 'body', 'test' ],
+    EmptyStatement:             [],
+    ExpressionStatement:        [ 'expression' ],
+    ForStatement:               [ 'init', 'test', 'update', 'body' ],
+    ForInStatement:             [ 'left', 'right', 'body' ],
+    ForOfStatement:             [ 'left', 'right', 'body' ],
+    IfStatement:                [ 'test', 'consequent', 'alternate' ],
+    LabeledStatement:           [ 'label', 'body' ],
+    ReturnStatement:            [ 'argument' ],
+    ThrowStatement:             [ 'argument' ],
+    TryStatement:               [ 'block', 'handler', 'finalizer' ],
+    WhileStatement:             [ 'test', 'body' ],
+    WithStatement:              [ 'object', 'body' ],
+
+    ArrayExpression:            [ 'elements' ],
+    ArrowFunctionExpression:    [ 'id', 'params', 'body' ],
+    AssignmentExpression:       [ 'left', 'right' ],
+    BinaryExpression:           [ 'left', 'right' ],
+    CallExpression:             [ 'callee', 'arguments' ],
+    ChainExpression:            [ 'expression' ],
+    ConditionalExpression:      [ 'test', 'consequent', 'alternate' ],
+    FunctionExpression:         [ 'id', 'params', 'body' ],
+    Identifier:                 [],
+    Literal:                    [],
+    LogicalExpression:          [ 'left', 'right' ],
+    NewExpression:              [ 'callee', 'arguments' ],
+    MemberExpression:           [ 'object', 'property' ],
+    MetaProperty:               [ 'meta', 'property' ],
+    ObjectExpression:           [ 'properties' ],
+    Property:                   [ 'key', 'value' ],
+    SequenceExpression:         [ 'expressions' ],
+    SpreadElement:              [ 'argument' ],
+    ThisExpression:             [],
+    UnaryExpression:            [ 'argument' ],
+    UpdateExpression:           [ 'argument' ],
+
+};

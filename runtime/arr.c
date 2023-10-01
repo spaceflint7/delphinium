@@ -41,22 +41,26 @@ js_val js_newarr (js_environ *env, int num_values, ...) {
 
 // ------------------------------------------------------------
 //
-// js_restarr
+// js_restarr_stk
 //
 // ------------------------------------------------------------
 
-js_val js_restarr (js_environ *env, js_link *stk_args) {
+js_val js_restarr_stk (js_environ *env, js_link *stk_ptr) {
+
+    js_link *arg_ptr;
 
     int count = 0;
-    js_link *arg_ptr = stk_args;
-    while ((arg_ptr = arg_ptr->next) != js_stk_top)
+    for (arg_ptr = stk_ptr;
+            arg_ptr != js_stk_top;
+                arg_ptr = arg_ptr->next)
         count++;
 
     js_val *values = js_malloc(count * sizeof(js_val));
 
     int index = 0;
-    arg_ptr = stk_args;
-    while ((arg_ptr = arg_ptr->next) != js_stk_top)
+    for (arg_ptr = stk_ptr;
+            arg_ptr != js_stk_top;
+                arg_ptr = arg_ptr->next)
         values[index++] = arg_ptr->value;
 
     js_val arr_val = js_newarr(env, 0);
@@ -66,6 +70,23 @@ js_val js_restarr (js_environ *env, js_link *stk_args) {
     arr->length_descr[0].num = count;
     arr->values = values;
 
+    return arr_val;
+}
+
+// ------------------------------------------------------------
+//
+// js_restarr_iter
+//
+// ------------------------------------------------------------
+
+js_val js_restarr_iter (js_environ *env, js_val *iterator) {
+
+    js_val arr_val = js_newarr(env, 0);
+    uint32_t prop_idx = 0;
+    while (iterator[0].raw) {
+        js_arr_set (env, arr_val, ++prop_idx, iterator[2]);
+        js_nextiter(env, iterator);
+    }
     return arr_val;
 }
 

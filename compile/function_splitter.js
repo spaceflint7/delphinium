@@ -30,9 +30,7 @@
 // and a new 'decl_node' property links to the new function.
 //
 // additionally, most processed nodes get these properties:
-// child_nodes - array of child nodes referenced by this node
 // parent_node - the containing node in the hierarchy of nodes
-// parent_func - function node of the containing function
 //
 // ------------------------------------------------------------
 
@@ -52,7 +50,10 @@ function process_stmt_or_expr (
         determine_function_name(node);
 
         process_function_node(
-            node, parent_func_stmt, func_list);
+                    node, parent_func_stmt, func_list);
+
+        for (const sub_node of utils.get_child_nodes(node))
+            sub_node.parent_node = node;
 
     } else {
 
@@ -62,9 +63,12 @@ function process_stmt_or_expr (
             node.strict_mode = parent_func_stmt.strict_mode;
         }
 
-        for (const sub_node of node.child_nodes) {
+        for (const sub_node of utils.get_child_nodes(node)) {
+
+            sub_node.parent_node = node;
+
             process_stmt_or_expr(
-                sub_node, parent_func_stmt, func_list);
+                    sub_node, parent_func_stmt, func_list);
         }
     }
 }
@@ -73,24 +77,53 @@ function process_stmt_or_expr (
 
 function determine_function_name (func_node) {
 
-    // if function declaration specifies a name
-    if (func_node.id?.name) {
-        func_node.id.is_function_name = true;
-        return;
-    }
+    let id_node;
 
-    // if anonymous function is declared in assignment
-    let parent_node = func_node.parent_node;
-    if (parent_node.type === 'AssignmentExpression') {
-        let op = parent_node.operator;
-        if (op === '='
-        ||  op === '&&='
-        ||  op === '||='
-        ||  op === '??=') {
+    do {
 
-            let lhs_id = parent_node.left.id;
-            if (lhs_id?.name)
-                lhs_id.is_function_name = true;
+        // if function declaration specifies a name
+        if (func_node.id?.name) {
+            id_node = func_node.id;
+            break;
+        }
+
+        let parent_node = func_node.parent_node;
+
+        // if anonymous function in variable declaration
+        if (parent_node.type === 'VariableDeclarator') {
+            let var_id = parent_node.id;
+            if (var_id?.name) {
+                id_node = var_id;
+                break;
+            }
+        }
+
+        // if anonymous function is declared in assignment
+        if (parent_node.type === 'AssignmentExpression') {
+            let op = parent_node.operator;
+            if (op === '='
+            ||  op === '&&='
+            ||  op === '||='
+            ||  op === '??=') {
+
+                let lhs_id = parent_node.left;
+                if (lhs_id?.name) {
+                    id_node = lhs_id;
+                    break;
+                }
+            }
+        }
+
+    } while (false);
+    if (id_node) {
+
+        id_node.is_function_name = true;
+        if (id_node !== func_node.id) {
+            func_node.id = {
+                type: 'Identifier',
+                name: id_node.name,
+                parent_node: func_node
+            };
         }
     }
 }
@@ -111,7 +144,6 @@ function process_function_node (
 
     new_node.strict_mode = parent_func_stmt.strict_mode || false;
     new_node.parent_node = undefined;
-    new_node.child_nodes = [];
 
     // clone the identifier sub-node, if one is present.
     // this new identifier node should translate to
@@ -121,14 +153,13 @@ function process_function_node (
 
     if (old_id) {
 
-        new_node.child_nodes.push(new_node.id = {
+        new_node.id = {
 
             type: old_id.type,
             name: old_id.name,
             loc: Object.assign({}, old_id.loc),
             parent_node: new_node,
-            child_nodes: [],
-        });
+        };
     }
 
     // connect to the body node from the old node
@@ -136,15 +167,6 @@ function process_function_node (
     if (new_node.body) {
 
         new_node.body.parent_node = new_node;
-        new_node.child_nodes.push(new_node.body);
-    }
-
-    // connect the parameter nodes from the old node
-
-    for (const param_node of old_node.params) {
-
-        param_node.parent_node = new_node;
-        new_node.child_nodes.push(param_node);
     }
 
     // parse the node tree that now starts with the
@@ -164,18 +186,12 @@ function process_function_node (
     old_node.body = undefined;
     old_node.superClass = undefined;
 
-    old_node.child_nodes = [];
-    if (old_id)
-        old_node.child_nodes.push(old_id);
-
     old_node.decl_node = new_node;
     new_node.decl_node = old_node;
 
-    //
     // if the old node was a function declaration, then
     // the declaration should be hoisted to the top of
     // the block where it was defined, similar to 'var'
-    //
 
     if (old_node.type === 'FunctionDeclaration') {
 
@@ -213,7 +229,6 @@ function process_function_tree (func_stmt, func_list) {
 
             func_stmt.strict_mode = true;
             block_stmt_list.shift();
-            block_stmt.child_nodes.shift();
         }
 
     } else if (func_stmt.expression) {
@@ -228,63 +243,22 @@ function process_function_tree (func_stmt, func_list) {
                         type: 'ReturnStatement',
                         argument: func_stmt.body,
                         loc: func_stmt.body.loc,
-                        child_nodes: func_stmt.child_nodes
                 } ],
-                parent_node: func_stmt,
-                child_nodes: [ return_stmt ],
         };
 
-        return_stmt.parent_node = block_stmt;
-        return_stmt.argument.parent_node = return_stmt;
-
         func_stmt.body = block_stmt;
-        func_stmt.child_nodes = [ block_stmt ];
 
     } else
         throw [ func_stmt, 'invalid function node' ];
 
+    // connect child nodes to the parent function
+    block_stmt.parent_node = func_stmt;
+    for (const param_node of func_stmt.params)
+        param_node.parent_node = func_stmt;
+
     // recursively process the BlockStatement
     process_stmt_or_expr(block_stmt, func_stmt, func_list);
     func_list.push(func_stmt);
-}
-
-// ------------------------------------------------------------
-
-function connect_nodes (node, parent_node) {
-
-    // the input tree connects nodes via specific properties,
-    // e.g. a 'body' property in some nodes, a 'test' property
-    // in other nodes.  to allow for simple tree traversal,
-    // we create generic 'parent_node' and 'child_node' links.
-
-    // we do this here, in a first pass, before any additional
-    // work which might add new properties and introduce some
-    // non-parent-child links in the tree.
-
-    const child_nodes = [];
-
-    for (const key in node) {
-        const array_or_sub_node = node[key];
-
-        if (Array.isArray(array_or_sub_node)) {
-            for (const array_elem of array_or_sub_node) {
-                if (array_elem?.type) {
-                    child_nodes.push(array_elem);
-                    array_elem.parent_property = key;
-                }
-            }
-
-        } else if (array_or_sub_node?.type) {
-            child_nodes.push(array_or_sub_node);
-            array_or_sub_node.parent_property = key;
-        }
-    }
-
-    node.parent_node = parent_node;
-    node.child_nodes = child_nodes;
-
-    for (const sub_node of child_nodes)
-        connect_nodes(sub_node, node);
 }
 
 // ------------------------------------------------------------
@@ -295,13 +269,16 @@ function visit_helper (filter, callback) {
 
     const f = (node) => {
 
+        const child_nodes = utils.get_child_nodes(node);
+
         if ((typeof(filter) === 'string' && filter === node.type)
         ||  (Array.isArray(filter) && filter.includes(node.type))
         ||  !filter) {
 
             callback(node);
         }
-        node.child_nodes.forEach(f);
+
+        child_nodes.forEach(f);
     }
 
     f(this);
@@ -310,8 +287,6 @@ function visit_helper (filter, callback) {
 // ------------------------------------------------------------
 
 module.exports = function split_into_functions (top_func_node) {
-
-    connect_nodes(top_func_node);
 
     const list_of_all_functions = [];
     process_function_tree(top_func_node, list_of_all_functions);

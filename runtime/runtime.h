@@ -180,6 +180,9 @@ js_val js_newobj (js_environ *env, const js_shape *shape, ...);
 js_val js_newobj2 (js_environ *env, js_val obj, js_val proto,
                     int num_props, ...);
 
+js_val js_restobj (js_environ *env, js_val from_obj,
+                   int skip_count, ...);
+
 //
 // array
 //
@@ -196,7 +199,9 @@ struct js_arr {
 
 js_val js_newarr (js_environ *env, int num_values, ...);
 
-js_val js_restarr (js_environ *env, js_link *stk_args);
+js_val js_restarr_stk (js_environ *env, js_link *stk_ptr);
+
+js_val js_restarr_iter (js_environ *env, js_val *iterator);
 
 #define js_arr_max_length 0xFFFFFFFAU
 
@@ -214,6 +219,9 @@ jmp_buf *js_entertry (js_environ *env);
 
 js_val js_leavetry (js_environ *env);
 
+#ifdef __GNUC__
+__attribute__((noreturn))
+#endif
 js_val js_throw (js_environ *env, js_val throw_val);
 
 //

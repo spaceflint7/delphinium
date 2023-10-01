@@ -266,13 +266,22 @@ function update_expression_array_length (lhs_obj_node, lhs_prop,
     //                  ? object[shape_index]
     //                  : js_getprop(...)
     //
+    // but note, that we only need tmp_len if this is an
+    // update or assignment, but not for a BinaryExpression
+    //
 
-    const lhs_len = utils_c.alloc_temp_value(lhs_obj_node);
+    let lhs_len, lhs_len_text1, lhs_len_text2;
+    if (cmd.indexOf('assign') != -1) {
+        lhs_len = utils_c.alloc_temp_value(lhs_obj_node);
+        lhs_len_text1 = `${lhs_len}.raw=${arr_obj}->length,`;
+        lhs_len_text2 = `${lhs_len}.raw=(uint64_t)-1,`;
+    } else
+        lhs_len_text1 = lhs_len_text2 = '';
+
     const lhs_var = utils_c.alloc_temp_value(lhs_obj_node);
     text += `(${lhs_var}=likely(js_is_object(${lhs_obj})&&`
          +  `${arr_obj}->super.proto==env->fast_arr_proto)`;
-    text += `?(${lhs_len}.raw=${arr_obj}->length,${lhs_val_arr})`
-         +  `:(${lhs_len}.raw=(uint64_t)-1,`;
+    text += `?(${lhs_len_text1}${lhs_val_arr}):(${lhs_len_text2}`;
 
     if (shape) {
         text += `(${arr_obj}->super.shape_id==((uint64_t)${shape})>>32`
@@ -293,7 +302,7 @@ function update_expression_array_length (lhs_obj_node, lhs_prop,
 
     text += calc_text;
 
-    if (cmd.indexOf('assign') != -1) {
+    if (lhs_len) { // if this is an update or assignment
 
         // the result must be a valid integer array length
         // and must be larger than the current length.  note

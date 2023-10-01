@@ -125,95 +125,29 @@ function variable_declaration (stmt, output) {
 
     for (const decl of stmt.declarations) {
 
-        if (decl.id?.type !== 'Identifier')
+        const decl_type = decl.id?.type;
+        if (decl_type === 'ArrayPattern') {
+            if (variable_declaration_pattern(
+                            stmt, decl, decl.id.elements, output))
+                continue;
+        }
+        if (decl_type === 'ObjectPattern') {
+            if (variable_declaration_pattern(
+                            stmt, decl, decl.id.properties, output))
+                continue;
+        }
+
+        if (decl_type !== 'Identifier')
             throw [ stmt, 'error in declaration' ];
 
-        let c_name = utils_c.get_variable_c_name(decl);
-        let text;
+        // initialize c_name even if we skip this var
+        utils_c.get_variable_c_name(decl);
 
         if (!variable_declaration_special_node(decl))
             continue;
 
-        if (decl.is_closure) {
-
-            // if this is a 'var' declaration, then we insert
-            // init at the function scope, else block scope
-            const block_node = (stmt.kind !== 'var') ? stmt
-                : utils.get_parent_func_node(stmt).body;
-
-            // push a source line to the top of the containing
-            // block, to allocate memory for the local variable.
-            // its initial value will be set to js_uninitialized.
-            // see js_newclosure () & js_closureval () in func.c,
-            // and closure_expression () in expression_writer.js.
-            utils_c.insert_init_text(block_node,
-                new_closure_var_prefix + c_name + new_closure_var_suffix);
-
-            if (!decl.init) {
-                // the closure variable should become accessible
-                // at the point of its declaration, so initialize
-                // it to undefined if no explicit initial value
-                decl.init = utils_c.init_expr_undefined;
-            }
-
-            text = '*' + c_name;
-
-        } else {
-
-            // normal local variable.  if declared with the
-            // 'var' keyword, then it was handled by function
-            // write_var_locals () in function_writer.js.
-            // but we might still need to initialize it.
-
-            text = '';
-            if (stmt.kind !== 'var') {
-                if (stmt.kind === 'const')
-                    text += 'const ';
-                else if (stmt.kind !== 'let')
-                    throw [ stmt, 'error in declaration' ];
-                text += 'js_val ';
-
-                if (decl.is_closure_var_init) {
-                    // special case for a 'var' (not let/const)
-                    // which is a closure variable.  memory was
-                    // allocated for it by the block above, but
-                    // the initial value of js_uninitialized
-                    // must now be replaced with js_undefined.
-                    // see also write_var_locals ()
-                    text = '*';
-                }
-
-                if (!decl.init)
-                    decl.init = utils_c.init_expr_undefined;
-
-            } else if (!decl.init)
-                continue;
-
-            text += c_name;
-        }
-
-        const init_expr = write_expression(decl.init, true);
-
-        if (decl.with_root_node && stmt.kind === 'var') {
-            //
-            // in the case of a 'var' local declared inside a
-            // 'with' statement, we effectively have an assignment
-            // here, which must go through 'with' logic.  see also
-            // process_declarations () in variable_resolver.js
-            //
-            const prop_var2 =
-                utils_c.get_with_local2(decl, decl.id.c_name);
-            text = `js_setwith(env,func_val,`
-                 + `${prop_var2},${init_expr});`;
-
-        } else {
-            //
-            // otherwise this is simple declaration/assignment
-            //
-            text += '=' + init_expr + ';';
-        }
-
-        output.push(text);
+        variable_declaration_simple_decl(
+                                stmt, decl, output);
     }
 }
 
@@ -268,12 +202,158 @@ function variable_declaration_special_node (decl) {
         } else if (!decl.is_arguments_object_ref) {
             // if strict mode, and 'arguments' is not
             // explicitly referenced, then don't create it
+            decl.skip_void_reference = true;
             return false;
         }
         text = `js_arguments(env,${func_val},stk_args)`
              + text;
         decl.init = { type: 'Literal', c_name: text };
     }
+
+    return true;
+}
+
+// ------------------------------------------------------------
+
+function variable_declaration_simple_decl (stmt, decl, output) {
+
+    let c_name = utils_c.get_variable_c_name(decl);
+    let text;
+
+    if (decl.is_closure) {
+
+        // if this is a 'var' declaration, then we insert
+        // init at the function scope, else block scope
+        const block_node = (stmt.kind !== 'var') ? stmt
+            : utils.get_parent_func_node(stmt).body;
+
+        // push a source line to the top of the containing
+        // block, to allocate memory for the local variable.
+        // its initial value will be set to js_uninitialized.
+        // see js_newclosure () & js_closureval () in func.c,
+        // and closure_expression () in expression_writer.js.
+        utils_c.insert_init_text(block_node,
+            new_closure_var_prefix + c_name + new_closure_var_suffix);
+
+        if (!decl.init) {
+            // the closure variable should become accessible
+            // at the point of its declaration, so initialize
+            // it to undefined if no explicit initial value
+            decl.init = utils_c.init_expr_undefined;
+        }
+
+        text = '*' + c_name;
+
+    } else {
+
+        // normal local variable.  if declared with the
+        // 'var' keyword, then it was handled by function
+        // write_var_locals () in function_writer.js.
+        // but we might still need to initialize it.
+
+        text = '';
+        if (stmt.kind !== 'var') {
+            if (stmt.kind === 'const') {
+                if (!stmt.inhibit_const) {
+                    // see variable_declaration_pattern ()
+                    text += 'const ';
+                }
+            } else if (stmt.kind !== 'let')
+                throw [ stmt, 'error in declaration' ];
+            text += 'js_val ';
+
+            if (decl.is_closure_var_init) {
+                // special case for a 'var' (not let/const)
+                // which is a closure variable.  memory was
+                // allocated for it by the block above, but
+                // the initial value of js_uninitialized
+                // must now be replaced with js_undefined.
+                // see also write_var_locals ()
+                text = '*';
+            }
+
+            if (!decl.init)
+                decl.init = utils_c.init_expr_undefined;
+
+        } else if (!decl.init)
+            return;
+
+        text += c_name;
+    }
+
+    const init_expr = write_expression(decl.init, true);
+
+    if (decl.with_root_node && stmt.kind === 'var') {
+        //
+        // in the case of a 'var' local declared inside a
+        // 'with' statement, we effectively have an assignment
+        // here, which must go through 'with' logic.  see also
+        // process_declarations () in variable_resolver.js
+        //
+        const prop_var2 =
+            utils_c.get_with_local2(decl, decl.id.c_name);
+        text = `js_setwith(env,func_val,`
+             + `${prop_var2},${init_expr});`;
+
+    } else {
+        //
+        // otherwise this is simple declaration/assignment
+        //
+        text += '=' + init_expr + ';';
+    }
+
+    output.push(text);
+}
+
+// ------------------------------------------------------------
+
+function variable_declaration_pattern (
+                            stmt, decl, decl_list, output) {
+
+    let skip_void_reference = decl.skip_void_reference;
+    if (stmt.kind !== 'var') {
+        // even if this is a const declaration, we
+        // discard the 'const' modifier, because the
+        // declaration will be followed by assignment
+        stmt.inhibit_const = true;
+        //
+        if (!(function do_elements (list) {
+            for (let decl2 of list) {
+                if (decl2 === null)
+                    continue;
+                if (decl2.type === 'RestElement') {
+                    decl2 = decl2.argument;
+                    if (decl2.type === 'ArrayPattern') {
+                        if (!do_elements(decl2.elements))
+                            return false;
+                        continue;
+                    }
+                }
+                if (decl2.type === 'ObjectPattern') {
+                    if (!do_elements(decl2.properties))
+                        return false;
+                    continue;
+                }
+                if (decl2.type === 'Property')
+                    decl2 = decl2.value;
+                if (decl2.type !== 'Identifier')
+                    return false;
+                if (skip_void_reference)
+                    decl2.decl_node.skip_void_reference = true;
+                variable_declaration_simple_decl(
+                                stmt, decl2.decl_node, output);
+            }
+            return true;
+        })(decl_list)) return false;
+    }
+
+    let temp = {
+        type: 'AssignmentExpression', operator: '=',
+        left: decl.id, // ArrayPattern or ObjectPattern
+        right: decl.init,
+        parent_node: stmt.parent_node,
+    };
+    output.push(write_expression(temp, false) + ';');
 
     return true;
 }
@@ -370,9 +450,6 @@ function for_statement (stmt, output) {
 
     const stmt_init = select_init_node(stmt);
 
-    output.push('for(');
-    output.push('/* init */');
-
     let update_text = '';
     if (stmt_init.type === 'VariableDeclaration') {
         for (const decl of stmt_init.declarations)
@@ -389,6 +466,7 @@ function for_statement (stmt, output) {
         test_text = compare_writer.write_condition(stmt.test)
                   + test_text;
     }
+    output.push('for(/* init */;');
     output.push('/* test */');
     output.push(test_text);
 
@@ -599,7 +677,7 @@ function try_statement (stmt, output) {
     output.push('}');
 
     const handler = stmt.handler;
-    if (handler.type !== 'CatchClause') {
+    if (handler?.type !== 'CatchClause') {
         // no catch clause
         output.push(`js_leavetry(env);`);
     } else {
@@ -619,9 +697,19 @@ function try_statement (stmt, output) {
             // destructuring should also be permitted here
             const var_decl = handler.param.declarations[0];
             var_decl.skip_void_reference = true;
-            var_decl.init = { type: 'Literal', c_name: exc };
+            var_decl.init = {
+                type: 'Literal', c_name: exc,
+                parent_node: var_decl };
             statement_writer(handler.param, output);
-            output.push(`(void)${var_decl.c_name};`);
+            // we received one or more c-vars in the c_name
+            // field, so add (void)references to prevent
+            // potential warning about unused vars.  this
+            // c_name field is set either as a side-effect
+            // of get_variable_c_name () (for a simple var)
+            // or add_c_name_for_void_reference () in case
+            // this is a destructuring assignment.
+            var_decl.c_name.split(',').map(
+                        x => output.push(`(void)${x};`));
         }
 
         statement_writer(handler.body, output);

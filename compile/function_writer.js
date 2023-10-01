@@ -1,5 +1,6 @@
 
 const write_statements = require('./statement_writer');
+const write_expression = require('./expression_writer');
 const shape_cache = require('./shape_cache');
 const utils = require('./utils');
 const utils_c = require('./utils_c');
@@ -99,37 +100,59 @@ function write_param_locals (func_stmt) {
     let stk_ptr = 'stk_' + utils.get_unique_id();
     let c_names = [];
     let output = [];
-    for (const node of func_stmt.params) {
-
-        if (node.type !== 'Identifier')
-            throw [ node, 'unknown parameter node' ];
-
-        const clean_name = utils_c.clean_name(node);
-        let c_name = node.c_name =
-                    `arg_${clean_name}_${node.unique_id}`;
+    for (let node of func_stmt.params) {
 
         // if the parameter is used in a closure reference,
+        // or is part of a binding/destructuring assignment,
         // then we collect the argument into a temp local,
         // rather than the actual local for the parameter.
         // we then allocate a closure variable, and assign
         // the value from the temp local to the closure var.
-        let closure_name;
-        if (node.is_closure) {
-            closure_name = c_name;
+        let c_name, c_name_var, is_rest_elem,
+            is_identifier, is_identifier_closure;
+        if (node.type === 'RestElement') {
+            is_rest_elem = true;
+            node = node.argument;
+        }
+        if (node.type === 'Identifier') {
+            // a plain identifier gets a c_name, even if it
+            // is also a closure, or inside a rest element
+            is_identifier = true;
+            is_identifier_closure = node.is_closure;
+            const clean_name = utils_c.clean_name(node);
+            c_name = node.c_name =
+                    `arg_${clean_name}_${node.unique_id}`;
+        }
+        if (is_identifier_closure || !is_identifier) {
+            // a parameter declaration which is something
+            // other than a non-closure plain identifier
+            // (which would be destructuring assignment),
+            // gets a temp var to hold the argument value.
             c_name = 'arg_' + utils.get_unique_id();
         }
         c_names.push(c_name);
 
-        output.push(`if(likely(${stk_ptr}!=js_stk_top)){`
-                  + `${c_name}=${stk_ptr}->value;`
-                  + `${stk_ptr}=${stk_ptr}->next;`
-                  + `}else ${c_name}=js_undefined;`);
+        if (is_rest_elem) {
+            // process_parameter () in variable_resolver.js
+            // checks that rest parameter is last parameter
+            output.push(
+                `${c_name}=js_restarr_stk(env,${stk_ptr});`);
+        } else {
+            output.push(`if(likely(${stk_ptr}!=js_stk_top)){`
+                      + `${c_name}=${stk_ptr}->value;`
+                      + `${stk_ptr}=${stk_ptr}->next;`
+                      + `}else ${c_name}=js_undefined;`);
+        }
 
-        if (closure_name) {
+        if (is_identifier_closure) {
             // allocate a closure variable,
             // and assign the actual argument value
-            output.push(`js_val *${closure_name}=`
+            output.push(`js_val *${node.c_name}=`
                       + `js_newclosure(env,&${c_name});`);
+        } else if (!is_identifier) {
+
+            if (!process_pattern(node, c_name, c_names, output))
+                throw [ node, 'unknown parameter node ' + node.type ];
         }
     }
 
@@ -141,6 +164,61 @@ function write_param_locals (func_stmt) {
     }
 
     return output;
+
+    //
+
+    function process_pattern (node, arg_c_name,
+                              all_c_names, output) {
+
+        let node2list;
+        if (node.type === 'ArrayPattern')
+            node2list = node.elements;
+        else if (node.type === 'ObjectPattern')
+            node2list = node.properties;
+        else
+            return false; // unknown node type
+
+        for (let node2 of node2list) {
+            if (node2.type === 'Property') {
+                node2 = node2.value;
+                if (node2.type === 'AssignmentPattern')
+                    node2 = node2.left;
+            } else if (node2.type === 'RestElement')
+                node2 = node2.argument;
+            if (node2.type !== 'Identifier')
+                return false; // unknown node type
+
+            const clean_name = utils_c.clean_name(node2);
+            all_c_names.push(node2.c_name =
+                `arg_${clean_name}_${node2.unique_id}`);
+            // force identifier_expression ()
+            // to use the c_name in this node
+            node2.is_property_name = true;
+        }
+
+        let temp_block_node = {
+            type: 'BlockStatement',
+            temp_vals: [], init_text: [],
+            is_temp_block_node: true,
+        };
+
+        let temp = {
+            type: 'AssignmentExpression', operator: '=',
+            left: node, // ArrayPattern or ObjectPattern
+            right: {
+                type: 'Literal', c_name: arg_c_name,
+                parent_node: temp_block_node
+            },
+            parent_node: temp_block_node,
+        };
+
+        let text = write_expression(temp, false);
+        temp_block_node.temp_vals.forEach(nm =>
+            output.push(`js_val ${nm};`));
+        output.push(...temp_block_node.init_text);
+        output.push(text + ';');
+        return true;
+    }
 }
 
 // ------------------------------------------------------------
@@ -224,7 +302,7 @@ function count_max_args_in_call_stmt (func) {
 
         } else {
 
-            node.child_nodes.forEach(sub_node =>
+            utils.get_child_nodes(node).forEach(sub_node =>
                 f(sub_node, recursive_arg_count));
         }
     }
@@ -266,14 +344,18 @@ exports.function_expression = function (expr) {
     const func_name = utils_c.get_variable_c_name(decl_node);
     const func_descr = expr.id?.c_name || 'js_undefined';
     const func_where = utils_c.make_function_where(decl_node);
-    const arity = (decl_node.strict_mode ? 'js_strict_mode|' : '')
-                + (decl_node.params.length || 0);
 
-    if (decl_node.params.length >= 0x40000000) {
+    let params_length = decl_node.params.length || 0;
+    if (decl_node.params_variadic && params_length)
+        params_length--;
+    if (params_length >= 0x40000000) {
         // number of parameters must not interfere with
         // any flag bits that share the 'arity' parameter
         throw [ expr, 'too many parameters' ];
     }
+    const arity = (decl_node.strict_mode ? 'js_strict_mode|' : '')
+                + params_length;
+
     // number of shape cache variables required,
     // determined by get_shape_variable () in utils_c.js
     if (decl_node.shape_cache_count >= 0xFFFF)

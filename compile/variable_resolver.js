@@ -28,30 +28,96 @@ const utils = require('./utils');
 
 function process_parameter (node) {
 
-    const func_stmt = node.parent_node;
-    if (node.type !== 'Identifier'
-    || !func_stmt.is_func_node) {
+    let func_stmt;
+    do {
 
-        throw [ node, 'unknown parameter node' ];
+        func_stmt = node.parent_node;
+        if (!func_stmt.is_func_node)
+            break; // error
+        node.scope = func_stmt.scope;
+
+        if (node.type === 'Identifier')
+            process_one_parameter(node);
+        else {
+            // destructuring assignment in parameters.
+            // first, we connect the sub-tree of nodes
+            (function set_parents_recursively (node1) {
+                for (const node2 of utils.get_child_nodes(node1)) {
+                    node2.parent_node = node1;
+                    node2.scope = node1.scope;
+                    set_parents_recursively(node2);
+                }
+            })(node);
+            // the actual function argument should not be
+            // accessible by name, but is later used as the
+            // right-hand  side of a destructuring assignment.
+            // the identifiers on the left-hand side of that
+            // assignment should be entered into scope.
+            if (!process_pattern_parameters(node))
+                break; // error
+        }
+        return;
+
+    } while (false);
+
+    throw [ node, 'unknown parameter node: ' + node.type ];
+
+    // place a simple identifier in function-level scope
+
+    function process_one_parameter (node) {
+
+        const other_node = node.scope.get(node.name);
+        if (other_node && func_stmt.strict_mode) {
+            // duplicate parameters in strict mode is an
+            // error.  note that esprima should catch this,
+            // so this code is probably never be reached.
+            const wrapper_node = {
+                id: node,
+                loc: node.loc,
+                scope: node.scope,
+            };
+            duplicate_identifier_error(wrapper_node, other_node);
+        }
+
+        node.unique_id = utils.get_unique_id();
+        node.scope.set(node.name, node);
     }
 
-    node.scope = func_stmt.scope;
+    // recursively process a destructuring assignment
+    // pattern in order to identify all the simple
+    // identifier names that we need to place in scope
 
-    const other_node = node.scope.get(node.name);
-    if (other_node && func_stmt.strict_mode) {
-        // duplicate parameters in strict mode is an
-        // error.  note that esprima should catch this,
-        // so this code is probably never be reached.
-        const wrapper_node = {
-            id: node,
-            loc: node.loc,
-            scope: node.scope,
-        };
-        duplicate_identifier_error(wrapper_node, other_node);
+    function process_pattern_parameters (node) {
+
+        if (node.type === 'RestElement') {
+            func_stmt.params_variadic = true;
+            node = node.argument;
+        }
+        let node2list;
+        if (node.type === 'Identifier')
+            node2list = [ node ];
+        else if (node.type === 'ArrayPattern')
+            node2list = node.elements;
+        else if (node.type === 'ObjectPattern')
+            node2list = node.properties;
+        else
+            return false; // unknown node type
+
+        for (let node2 of node2list) {
+            if (node2.type === 'Property') {
+                node2 = node2.value;
+                if (node2.type === 'AssignmentPattern')
+                    node2 = node2.left;
+            } else if (node2.type === 'RestElement')
+                return process_pattern_parameters(node2);
+            if (node2.type !== 'Identifier')
+                return false; // unknown node type
+            node2.unique_id = utils.get_unique_id();
+            process_one_parameter(node2);
+        }
+
+        return true;
     }
-
-    node.unique_id = utils.get_unique_id();
-    node.scope.set(node.name, node);
 }
 
 // ------------------------------------------------------------
@@ -190,29 +256,95 @@ function add_local_if_declared_var (node) {
 
 function add_one_or_more_locals (node, only_if_first_in_scope) {
 
+    // first, we collect all declarations into a list.
+    // most declarations are found as an Identifier node,
+    // directly below a VariableDeclarator parent node.
+    // but with destructuring, there are one or more
+    // layers of ArrayPattern or ObjectPattern nodes.
+
+    const list = [];
+
     for (const decl of node.declarations) {
-
         if (decl.type === 'VariableDeclarator') {
-
-            if (decl.id?.type === 'Identifier') {
-
-                decl.kind = node.kind;
-                decl.scope = node.scope;
-                if (decl.kind === 'const')
-                    decl.is_const = true;
-
-                if (only_if_first_in_scope)
-                    add_local_if_first_in_scope(decl);
-                else
-                    add_local_if_declared_var(decl);
-
-                decl.id.unique_id = decl.unique_id;
+            if (add_one_to_list(list, decl?.id))
                 continue;
-            }
         }
-
         throw [ node, `unexpected node ${node.type}` ];
     }
+
+    // if the next node is a simple identifier,
+    // add it to the list, otherwise process the
+    // pattern node, possibly recursively
+
+    function add_one_to_list (list, decl) {
+
+        const decl_type = decl.type;
+        if (decl_type === 'Identifier') {
+            list.push(decl);
+            return true;
+        }
+        if (decl_type === 'Property') {
+            list.push(decl.value);
+            return true;
+        }
+        if (decl_type === 'ArrayPattern')
+            return add_some_to_list(list, decl.elements, true);
+        if (decl_type === 'ObjectPattern')
+            return add_some_to_list(list, decl.properties);
+    }
+
+    function add_some_to_list (list, list2, can_skip_null) {
+
+        for (let decl2 of list2) {
+            if (decl2 === null && can_skip_null)
+                continue;
+            if (decl2.type === 'RestElement')
+                decl2 = decl2.argument;
+            if (!add_one_to_list(list, decl2, decl2.type))
+                return false;
+        }
+        return true;
+    }
+
+    //
+    // now we have a list of identifier 'leaf' nodes.
+    //
+
+    let new_decls;
+
+    for (let decl of list) {
+
+        // if the declaration is not a direct child of
+        // a VariableDeclarator node, then create a fake
+        // VariableDeclarator node between the top-level
+        // VariableDeclaration and the actual Identifier.
+
+        if (decl.parent_node.type === 'VariableDeclarator')
+            decl = decl.parent_node;
+        else {
+
+            if (!new_decls)
+                node.declarations_2 = new_decls = [];
+            new_decls.push(decl = decl.decl_node = {
+                type: 'VariableDeclarator',
+                id: decl, parent_node: node });
+        }
+
+        // add the new Identifier node into the scope
+
+        decl.kind = node.kind;
+        decl.scope = node.scope;
+        if (decl.kind === 'const')
+            decl.is_const = true;
+
+        if (only_if_first_in_scope)
+            add_local_if_first_in_scope(decl);
+        else
+            add_local_if_declared_var(decl);
+
+        decl.id.unique_id = decl.unique_id;
+    }
+
 }
 
 // ------------------------------------------------------------
@@ -242,7 +374,6 @@ function create_meta_property (node) {
         node = {
             meta:     { type: 'Identifier', name: 'new' },
             property: { type: 'Identifier', name: 'target' },
-            child_nodes: [],
             parent_node: node,
         };
     } else
@@ -262,7 +393,6 @@ function create_meta_property (node) {
     node.name = var_name;
     node.meta = undefined;
     node.property = undefined;
-    node.child_nodes.length = 0;
 
     // if the meta.property name is already in scope,
     // then we already did the work once, and we're done
@@ -300,13 +430,9 @@ function create_meta_property (node) {
         type: 'Identifier',
         name: var_name,
         parent_node: prop_node,
-        parent_property: 'id',
-        child_nodes: [],
     };
     prop_node.init = null;
     prop_node.parent_node = meta_node;
-    prop_node.parent_property = 'declarations';
-    prop_node.child_nodes = [ prop_node.id ];
     prop_node.scope = func_node.scope;
     prop_node.is_meta_property = true;
 
@@ -317,8 +443,6 @@ function create_meta_property (node) {
     meta_node.declarations = [ prop_node ];
     meta_node.kind = 'const';
     meta_node.parent_node = func_node.body;
-    meta_node.parent_property = 'body';
-    meta_node.child_nodes = [ prop_node ];
     meta_node.scope = func_node.scope;
     meta_node.is_meta_property = true;
 
@@ -342,8 +466,6 @@ function create_arguments_object (func_node) {
         type: 'Identifier',
         name: 'arguments',
         parent_node: undefined,
-        parent_property: 'id',
-        child_nodes: [],
     };
 
     const node2 = {
@@ -351,19 +473,14 @@ function create_arguments_object (func_node) {
         id: node3,
         init: null,
         parent_node: undefined,
-        parent_property: 'declarations',
-        child_nodes: [ node3 ],
         scope: func_node.scope,
         is_arguments_object: true,
     };
 
     const node1 = {
-        type: 'VariableDeclaration',
+        type: 'VariableDeclaration', kind: 'let',
         declarations: [ node2 ],
-        kind: 'let',
         parent_node: func_node.body,
-        parent_property: 'body',
-        child_nodes: [ node2 ],
         scope: func_node.scope,
         is_arguments_object: true,
     };
@@ -375,7 +492,6 @@ function create_arguments_object (func_node) {
     // the function body, and the topmost local scope.
     func_node.body.body.unshift(node1);
     add_one_or_more_locals(node1, true);
-
 }
 
 // ------------------------------------------------------------
@@ -393,33 +509,26 @@ function declare_catch_variable (node) {
     // by our normal variable resolution logic.
     //
 
-    const decl_node = {
+    node.param = {
         type: 'VariableDeclaration', kind: 'let',
         declarations: [ {
             type: 'VariableDeclarator',
             id: node.param,
             init: null,
-            parent_property: 'declarations',
             parent_node: null,
-            child_nodes: [],
         } ],
-        parent_property: 'param',
         parent_node: node,
-        child_nodes: [],
     };
 
-    const decl_sub_node = decl_node.declarations[0];
-    decl_node.child_nodes.push(decl_sub_node);
-    decl_sub_node.parent_node = decl_node;
+    let node_var_decl = node.param;
+    let node_decl_0   = node_var_decl.declarations[0];
+    let node_id       = node_decl_0.id;
 
-    const decl_id_node = decl_sub_node.id;
-    decl_sub_node.child_nodes.push(decl_id_node);
-    decl_id_node.parent_node = decl_sub_node;
+    node_id.parent_node         = node_decl_0;
+    node_decl_0.parent_node     = node_var_decl;
+    node_var_decl.parent_node   = node;
 
-    // store the new decl_node in place of old node.param
-    const node_param_index =
-                    node.child_nodes.indexOf(node.param);
-    node.child_nodes[node_param_index] = node.param = decl_node;
+    process_declarations(node_var_decl);
 }
 
 // ------------------------------------------------------------
@@ -433,29 +542,28 @@ function process_references (node) {
 
     if (node.unique_id)
         return;
+    let parent_node = node.parent_node;
 
-    if (node.parent_property === 'property'
-    &&  node.parent_node.type === 'MemberExpression'
-    && !node.parent_node.computed) {
+    // check if property access expression: obj.prop
+    // or if it is an object expression: { prop: value }
+    const is_property_access =
+        (   parent_node.type === 'MemberExpression'
+         && parent_node.property === node);
+    const is_object_expression =
+        (   parent_node.type === 'Property'
+         && (   parent_node.parent_node.type === 'ObjectExpression'
+             || parent_node.parent_node.type === 'ObjectPattern')
+         && parent_node.key === node);
+    if (    (is_property_access || is_object_expression)
+         && !parent_node.computed) {
         // don't try to resolve literal property names;
         // just let the literal.js module stringify them.
-        // this is a property access expression: obj.prop
         node.is_property_name = true;
         return;
     }
 
-    if (node.parent_property === 'key'
-    &&  node.parent_node.type === 'Property'
-    && !node.parent_node.computed) {
-        // don't try to resolve literal property names;
-        // just let the literal.js module stringify them
-        // this is an object expression: { prop: value }
-        node.is_property_name = true;
-        return;
-    }
-
-    if (node.parent_property === 'id'
-    &&  node.parent_node.type === 'FunctionExpression') {
+    if (parent_node.type === 'FunctionExpression'
+    &&  parent_node.id === node) {
         // don't try to resolve the name of a function
         // in a function expression;  this identifier
         // is added by process_function (), see there
@@ -473,7 +581,8 @@ function process_references (node) {
 
     let with_decl_node;
     let is_closure = false;
-    let parent_node = node;
+
+    parent_node = node;
     while (parent_node) {
 
         const check_node = parent_node;
@@ -575,7 +684,7 @@ function check_uninitialized_reference (ref_node, decl_node) {
 
     if (!error) {
 
-        const block = utils.get_parent_block_node(ref_node);
+        const block = utils.get_parent_block_node(ref_node, false);
         if (block === utils.get_parent_block_node(decl_node)
         &&  utils.get_distance_from_block(ref_node, block)
           < utils.get_distance_from_block(decl_node, block)) {

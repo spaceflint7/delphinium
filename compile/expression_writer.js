@@ -223,21 +223,201 @@ function assignment_expression (expr) {
     let left = expr.left;
     if (left.type === 'Identifier') {
 
-        if (left.is_const)
-            throw [ left, 'assignment to constant variable' ];
+        if (!left.is_const) {
 
-        left = expression_writer(left, false);
-        const right = expression_writer(expr.right);
+            left = expression_writer(left, false);
+            const right = expression_writer(expr.right);
 
-        return `${left}=${right}`;
+            return `${left}=${right}`;
+        }
 
     } else if (left.type === 'MemberExpression') {
 
         const f = expression_writers['MemberExpression'];
         return f(left, expr.right);
+
+    } else if (left.type === 'ArrayPattern') {
+
+        return array_pattern(left, expr.right);
+
+    } else if (left.type === 'ObjectPattern') {
+
+        return object_pattern(left, expr.right);
     }
 
+    if (left.is_const)
+        throw [ left, 'assignment to constant variable' ];
+
     throw [ expr, `unexpected ${left.type} as l-value in assignment` ];
+
+    //
+    // destructuring using an array pattern
+    //
+
+    function array_pattern (left, right) {
+
+        const iter = 'iter_' + utils.get_unique_id();
+        utils_c.insert_init_text(right, `js_val ${iter}[3];`);
+        let text = `(js_newiter(env,${iter},'O',`
+                 + expression_writer(right, false) + ')';
+
+        return (function do_elements (text, elements) {
+
+            for (let elem_ix = 0; elem_ix < elements.length; elem_ix++) {
+                let elem = elements[elem_ix];
+                if (elem_ix > 0)
+                    text += `,js_nextiter(env,${iter})`;
+                if (elem === null) // skip element
+                    continue;
+                let elem_val = `${iter}[2]`;
+
+                if (elem.type === 'RestElement'
+                &&  elem_ix === elements.length - 1) {
+
+                    elem = elem.argument;
+                    if (elem.type === 'ArrayPattern')
+                        return do_elements(text, elem.elements);
+                    elem_val = `js_restarr_iter(env,${iter})`;
+                }
+
+                let temp = {
+                    type: 'AssignmentExpression', operator: '=',
+                    left: elem,
+                    right: { type: 'Literal', c_name: elem_val,
+                            parent_node: expr },
+                    parent_node: expr,
+                };
+                text += ',' + assignment_expression(temp);
+                add_c_name_for_void_reference(left, elem);
+            }
+
+            return text;
+        })(text, left.elements) + ')';
+    }
+
+    //
+    // destructuring using an object pattern
+    //
+
+    function object_pattern (left, right) {
+
+        const properties = left.properties;
+        if (!properties.length)
+            return '';
+
+        let from = utils_c.alloc_temp_value(right);
+        let text = `(${from}=`
+                 + expression_writer(right, false);
+
+        // properties to skip, in case of ...rest
+        let skip_props = [];
+        let tmp;
+
+        for (let prop_ix = 0; prop_ix < properties.length; prop_ix++) {
+
+            let prop = properties[prop_ix];
+            let text2 = '';
+            let left2;
+            let c_name;
+
+            if (prop.type === 'RestElement'
+            &&  prop_ix === properties.length - 1
+            &&  prop.argument.type === 'Identifier') {
+
+                prop = prop.argument;
+                c_name = utils_c.get_variable_c_name(
+                                            prop.decl_node ?? prop);
+                text += `,${c_name}=js_restobj(env,${from},`
+                     + `${skip_props.length},` + skip_props.join(',') + ')';
+                add_c_name_for_void_reference(left, prop);
+                break;
+            }
+
+            const with_value =
+                (prop.value.type === 'AssignmentPattern');
+            if (with_value) {
+                if (!tmp)
+                    tmp = utils_c.alloc_temp_value(right);
+                text2 += `(js_is_undefined(${tmp}=`;
+                left2 = prop.value.left;
+            } else
+                left2 = prop.value;
+
+            if (prop.computed) {
+                // we may be called to process a pattern parameter,
+                // e.g.: function f ( { [compute_expr]: param_name } )
+                // in this case, there is no block node between the
+                // property node, and the function node.  however,
+                // it means we were called by process_pattern () in
+                // function_writer.js), and it passes a block node.
+                let old_parent_node;
+                if (!utils.get_parent_block_node(prop.key, false)) {
+                    const temp_block_node =
+                        utils.get_parent_block_node(right, false);
+                    if (temp_block_node?.is_temp_block_node) {
+                        old_parent_node = prop.key.parent_node;
+                        prop.key.parent_node = temp_block_node;
+                    }
+                }
+                c_name = utils_c.alloc_temp_value(right);
+                text2 += `(${c_name}=`
+                      + expression_writer(prop.key, true)
+                      + '),';
+                if (old_parent_node)
+                    prop.key.parent_node = old_parent_node;
+            } else
+                c_name = utils_c.get_variable_c_name(prop.key);
+            skip_props.push(c_name);
+            text2 += `js_getprop(env,${from},${c_name}`
+                  +  ',&env->dummy_shape_cache)';
+
+            if (with_value) {
+                text2 += ')?'
+                    + expression_writer(prop.value.right, true)
+                    + `:${tmp})`;
+            }
+
+            let temp = {
+                type: 'AssignmentExpression', operator: '=',
+                left: left2,
+                right: { type: 'Literal', c_name: text2 },
+                parent_node: expr,
+            };
+            text += ',' + assignment_expression(temp);
+            add_c_name_for_void_reference(left, left2);
+        }
+
+        return text + ')';
+    }
+
+    //
+
+    function add_c_name_for_void_reference (decl_node, var_node) {
+
+        // if the caller is try_statement (), it expects
+        // that the node it passed to statement_writer (),
+        // will upon return, have a 'c_name' field.  this
+        // field is used to write the text "(void)c_name;".
+        // so we must simulate this expected effect here.
+        for (;;) {
+            decl_node = decl_node.parent_node;
+            if (!decl_node)
+                return;
+            if (decl_node.skip_void_reference)
+                break;
+        }
+
+        if (decl_node.skip_void_reference) {
+
+            const c_name = var_node.decl_node?.c_name;
+            if (c_name) {
+                if (!decl_node.c_name)
+                    decl_node.c_name = c_name;
+                else
+                    decl_node.c_name += ',' + c_name;
+            }
+        }
+    }
 }
 
 // ------------------------------------------------------------
@@ -439,10 +619,12 @@ function new_expression (expr) {
 
 function sequence_expression (expr) {
 
+    if (expr.parent_node.void_result)
+        expr.void_result = true;
     let sequence = '';
     for (var seq_expr of expr.expressions)
         sequence += expression_writer(seq_expr) + ',';
-    return sequence;
+    return sequence.slice(0, -1); // discard last comma
 }
 
 // ------------------------------------------------------------

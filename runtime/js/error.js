@@ -151,96 +151,96 @@ _shadow.SyntaxError = SyntaxError; // keep a copy
 //
 // ------------------------------------------------------------
 
-_shadow.TypeError_defineProperty_descriptor = function () {
+_shadow.TypeError_defineProperty_descriptor = function throw_TypeError () {
 
     throw TypeError('Property descriptor must be an object');
 }
 
-_shadow.TypeError_defineProperty_3 = function () {
+_shadow.TypeError_defineProperty_3 = function throw_TypeError () {
 
     throw TypeError('Cannot redefine property');
 }
 
-_shadow.TypeError_defineProperty_4 = function () {
+_shadow.TypeError_defineProperty_4 = function throw_TypeError () {
 
     throw TypeError('Property descriptor must specify either data or accessor');
 }
 
-_shadow.TypeError_defineProperty_5 = function () {
+_shadow.TypeError_defineProperty_5 = function throw_TypeError () {
 
     throw TypeError('Property descriptor must specify function in accessor');
 }
 
-_shadow.TypeError_cyclicPrototype = function () {
+_shadow.TypeError_cyclicPrototype = function throw_TypeError () {
 
     throw TypeError('Cyclic prototype value');
 }
 
-_shadow.TypeError_readOnlyProperty = function (prop) {
+_shadow.TypeError_readOnlyProperty = function throw_TypeError (prop) {
 
     prop = prop ? (': ' + prop) : '';
     throw TypeError('Cannot set read-only property' + prop);
 }
 
-_shadow.TypeError_primitiveProperty = function () {
+_shadow.TypeError_primitiveProperty = function throw_TypeError () {
 
     throw TypeError('Cannot set or delete properties on a primitive value');
 }
 
-_shadow.TypeError_deleteProperty = function (prop) {
+_shadow.TypeError_deleteProperty = function throw_TypeError (prop) {
 
     prop = prop ? (': ' + prop) : '';
     throw TypeError('Cannot delete a non-configurable property' + prop);
 }
 
-_shadow.TypeError_convert_null_to_object = function () {
+_shadow.TypeError_convert_null_to_object = function throw_TypeError () {
 
     throw TypeError('Cannot convert undefined or null to object');
 }
 
-_shadow.TypeError_get_property_of_null_object = function (prop) {
+_shadow.TypeError_get_property_of_null_object = function throw_TypeError (prop) {
 
     prop = prop ? (': ' + prop) : '';
     throw TypeError('Cannot get property of undefined or null');
 }
 
-_shadow.TypeError_set_property_of_null_object = function (prop) {
+_shadow.TypeError_set_property_of_null_object = function throw_TypeError (prop) {
 
     prop = prop ? (': ' + prop) : '';
     throw TypeError('Cannot set property of undefined or null');
 }
 
-_shadow.TypeError_object_not_extensible = function () {
+_shadow.TypeError_object_not_extensible = function throw_TypeError () {
 
     throw TypeError('Cannot add property to non-extensible object');
 }
 
-_shadow.TypeError_expected_symbol = function () {
+_shadow.TypeError_expected_symbol = function throw_TypeError () {
 
     throw TypeError('Type mismatch, expected a symbol');
 }
 
-_shadow.TypeError_expected_number = function () {
+_shadow.TypeError_expected_number = function throw_TypeError () {
 
     throw TypeError('Type mismatch, expected a number');
 }
 
-_shadow.TypeError_expected_integer = function () {
+_shadow.TypeError_expected_integer = function throw_TypeError () {
 
     throw TypeError('Type mismatch, expected an integer number');
 }
 
-_shadow.TypeError_expected_bigint = function () {
+_shadow.TypeError_expected_bigint = function throw_TypeError () {
 
     throw TypeError('Type mismatch, expected a BigInt');
 }
 
-_shadow.TypeError_expected_object = function () {
+_shadow.TypeError_expected_object = function throw_TypeError () {
 
     throw TypeError('Type mismatch, expected an object');
 }
 
-_shadow.TypeError_expected_function = function (funcName) {
+_shadow.TypeError_expected_function = function throw_TypeError (funcName) {
 
     if (funcName)
         funcName = ': ' + funcName;
@@ -249,7 +249,7 @@ _shadow.TypeError_expected_function = function (funcName) {
     throw TypeError('Type mismatch, expected a function' + funcName);
 }
 
-_shadow.TypeError_expected_constructor = function (funcName) {
+_shadow.TypeError_expected_constructor = function throw_TypeError (funcName) {
 
     if (funcName)
         funcName = ': ' + funcName;
@@ -258,37 +258,37 @@ _shadow.TypeError_expected_constructor = function (funcName) {
     throw TypeError('Type mismatch, expected a constructor function' + funcName);
 }
 
-_shadow.TypeError_invalid_prototype = function () {
+_shadow.TypeError_invalid_prototype = function throw_TypeError () {
 
     throw TypeError('Prototype must be object or null');
 }
 
-_shadow.TypeError_convert_object_to_primitive = function () {
+_shadow.TypeError_convert_object_to_primitive = function throw_TypeError () {
 
     throw TypeError('Cannot convert object to primitive value');
 }
 
-_shadow.TypeError_convert_symbol_to_string = function () {
+_shadow.TypeError_convert_symbol_to_string = function throw_TypeError () {
 
     throw TypeError('Cannot convert symbol to string value');
 }
 
-_shadow.TypeError_invalid_argument = function () {
+_shadow.TypeError_invalid_argument = function throw_TypeError () {
 
     throw TypeError('Invalid argument');
 }
 
-_shadow.TypeError_iterator_result = function () {
+_shadow.TypeError_iterator_result = function throw_TypeError () {
 
     throw TypeError('Iterator result is not an object');
 }
 
-_shadow.TypeError_not_iterable = function () {
+_shadow.TypeError_not_iterable = function throw_TypeError () {
 
     throw TypeError('Type mismatch, expected iterable object');
 }
 
-_shadow.TypeError_incompatible_object = function (expectedType) {
+_shadow.TypeError_incompatible_object = function throw_TypeError (expectedType) {
 
     if (expectedType)
         expectedType = ', expected ' + expectedType;
@@ -297,48 +297,48 @@ _shadow.TypeError_incompatible_object = function (expectedType) {
     throw TypeError('Incompatible object' + expectedType);
 }
 
-_shadow.TypeError_mix_types_in_arithmetic = function () {
+_shadow.TypeError_mix_types_in_arithmetic = function throw_TypeError () {
 
     throw TypeError('Cannot mix incompatible types in arithmetic');
 }
 
-_shadow.TypeError_unsupported_operation = function () {
+_shadow.TypeError_unsupported_operation = function throw_TypeError () {
 
     throw TypeError('Operation not supported');
 }
 
-_shadow.ReferenceError_uninitialized_variable = function () {
+_shadow.ReferenceError_uninitialized_variable = function throw_ReferenceError () {
 
     throw ReferenceError('Cannot access uninitialized variable');
 }
 
-_shadow.ReferenceError_not_defined = function (prop) {
+_shadow.ReferenceError_not_defined = function throw_ReferenceError (prop) {
 
     prop = prop ? (': ' + prop) : '';
     throw ReferenceError('Property or variable is not defined' + prop);
 }
 
-_shadow.RangeError_array_length = function () {
+_shadow.RangeError_array_length = function throw_RangeError () {
 
     throw ReferenceError('Invalid array length');
 }
 
-_shadow.RangeError_invalid_argument = function () {
+_shadow.RangeError_invalid_argument = function throw_RangeError () {
 
     throw RangeError('Invalid argument');
 }
 
-_shadow.RangeError_division_by_zero = function () {
+_shadow.RangeError_division_by_zero = function throw_RangeError () {
 
     throw RangeError('Division by zero');
 }
 
-_shadow.RangeError_bigint_too_large = function () {
+_shadow.RangeError_bigint_too_large = function throw_RangeError () {
 
     throw RangeError('BigInt value is too large');
 }
 
-_shadow.SyntaxError_invalid_argument = function () {
+_shadow.SyntaxError_invalid_argument = function throw_SyntaxError () {
 
     throw SyntaxError('Invalid argument');
 }

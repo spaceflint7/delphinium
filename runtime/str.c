@@ -151,6 +151,40 @@ static js_val js_str_c (js_environ *env, const char *ascii_text) {
 
 // ------------------------------------------------------------
 //
+// js_str_search_or_intern
+//
+// ------------------------------------------------------------
+
+static objset_id *js_str_search_or_intern (js_environ *env,
+                            const wchar_t *data, int wlen) {
+
+    objset_id *id = objset_search(
+                        env->strings_set, data, wlen);
+    if (!id) {
+
+        id = js_malloc(sizeof(objset_id) + wlen);
+        id->len = wlen;
+        id->flags = js_str_is_string;
+        memcpy(id->data, data, wlen);
+
+        objset_id *id2 = js_check_alloc(objset_intern(
+                                    &env->strings_set, id));
+        if (id2 == id) {
+            // the input id has been interned and returned,
+            // so we should flag the id as such
+            id->flags |= js_str_in_objset;
+
+        } else { // we received an id that was already interned
+            free(id);
+            id = id2;
+        }
+    }
+
+    return id;
+}
+
+// ------------------------------------------------------------
+//
 // js_str_concat
 //
 // concatenates two input strings into a new string.
@@ -394,6 +428,47 @@ static uint32_t js_str_is_length_or_number (
 
 // ------------------------------------------------------------
 //
+// js_str_index
+//
+// create an interned string from integer index
+//
+// ------------------------------------------------------------
+
+static js_val js_str_index (js_environ *env, uint32_t prop_idx) {
+
+    wchar_t digits[28]; // room for two copies
+    int len_digits;
+
+    if (--prop_idx <= js_max_index) {
+        // prop_idx is in range 1 .. (js_max_index + 1)
+        wchar_t *ch_R = (wchar_t *)
+                    ((char *)digits + sizeof(digits));
+        *--ch_R = 0;
+        do {
+            int digit = prop_idx % 10;
+            prop_idx = prop_idx / 10;
+            *--ch_R = digit + L'0';
+        } while (prop_idx);
+        wchar_t *ch_L = digits;
+        while ((*ch_L = *ch_R)) {
+            ch_L++;
+            ch_R++;
+        }
+        len_digits = (char *)ch_L - (char *)digits;
+
+    } else {
+        // prop_idx is zero or invalid
+        digits[0] = L'0';
+        len_digits = sizeof(wchar_t);
+    }
+
+    objset_id *id = js_str_search_or_intern(
+                            env, digits, len_digits);
+    return js_make_primitive(id, js_prim_is_string);
+}
+
+// ------------------------------------------------------------
+//
 // js_str_setprop
 //
 // ------------------------------------------------------------
@@ -453,30 +528,8 @@ static js_val js_str_getprop (js_environ *env,
     if (prop_idx <= str_len) {
 
         const wchar_t *the_char = &str_ptr->data[prop_idx - 1];
-        objset_id *id = objset_search(
-                            env->strings_set,
-                            the_char, sizeof(wchar_t));
-        if (!id) {
-
-            id = js_malloc(sizeof(objset_id)
-                         + sizeof(wchar_t));
-            id->len = sizeof(wchar_t);
-            id->flags = js_str_is_string;
-            id->data[0] = *the_char;
-
-            objset_id *id2 = js_check_alloc(objset_intern(
-                                        &env->strings_set, id));
-            if (id2 == id) {
-                // the input id has been interned and returned,
-                // so we should flag the id as such
-                id->flags |= js_str_in_objset;
-
-            } else { // we received an id that was already interned
-                free(id);
-                id = id2;
-            }
-        }
-
+        objset_id *id = js_str_search_or_intern(
+                            env, the_char, sizeof(wchar_t));
         return js_make_primitive(id, js_prim_is_string);
     }
 

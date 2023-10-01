@@ -38,26 +38,20 @@ function global_to_object_lookup (node, func_node) {
         type: 'Identifier',
         name: 'global',
         loc: node.loc,
-        parent_property: 'object',
         parent_node: node,
-        child_nodes: [],
         scope: node.scope,
         decl_node: utils_c.env_global_decl_node
     };
-    node.child_nodes.push(node.object);
 
     node.property = {
         type: 'Identifier',
         name: node.name,
         loc: node.loc,
-        parent_property: 'property',
         parent_node: node,
-        child_nodes: [],
         scope: node.scope,
         is_property_name: true,
         c_name: node.c_name,
     };
-    node.child_nodes.push(node.property);
 
     node.type = 'MemberExpression';
     node.name = undefined;
@@ -102,7 +96,10 @@ process_function (func_node) {
             if (    typeof(node.value) !== 'number'
                  && typeof(node.value) !== 'boolean')
                 literal = get_value_or_c_name(node);
-            indexer = (node.parent_property === 'property');
+            // check if literal is used in object['literal']
+            indexer = (node.parent_node.type === 'MemberExpression'
+                    && node.parent_node.property === node);
+            indexer ||= (node.parent_node.type === 'Property');
         }
 
         if (literal === '__proto__') {

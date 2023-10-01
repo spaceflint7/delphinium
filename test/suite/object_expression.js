@@ -31,3 +31,7 @@ console.log(o1);
 console.log(o2.foo);
 o2.foo = 123;
 console.log(o2.was_getter);
+
+// test that spread syntax also copies array elements
+const o3 = { ... [ 123, 456, 789 ] };
+console.log(o3);

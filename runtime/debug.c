@@ -31,7 +31,8 @@ static void js_object_print (js_environ *env, const js_obj *obj) {
             const js_descriptor *descr = js_get_pointer(value);
             const int flags = js_descr_flags_without_setter(descr)
                             & (js_descr_value | js_descr_enum);
-            if (flags != (js_descr_value | js_descr_enum))
+            //if (flags != (js_descr_value | js_descr_enum))
+            if (flags != js_descr_value)
                 continue;
         }
         if (count++ > 0)

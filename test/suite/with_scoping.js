@@ -56,3 +56,10 @@ with (o1) {
 with (Array.prototype) { console.log('keys', typeof(keys)); }
 Array.prototype[Symbol.unscopables].keys = false;
 with (Array.prototype) { console.log('keys', typeof(keys)); }
+
+// test destructuring assignment to 'with' target
+const o2 = { testProperty: 123 };
+with (o2) {
+    [ ,, testProperty] = [ 123, 456, 789 ];
+}
+console.log(o2);

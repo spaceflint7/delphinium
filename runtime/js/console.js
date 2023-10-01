@@ -54,6 +54,18 @@ function log1 (arg) {
 }
 
 //
+// log1quoted
+//
+
+function log1quoted (val) {
+
+    if (typeof(val) === 'string')
+        log1("'" + val + "'");
+    else
+        log1(val);
+}
+
+//
 // log2func
 //
 
@@ -94,32 +106,39 @@ function log2arr (arg) {
         js_str_print(' ');
 
         let empties = 0;
+        let at_least_one;
 
-        if (js_property_flags(arg, 0) & 0x10)
-            log1(arg[0]);
-        else
+        if (js_property_flags(arg, 0) & 0x10) {
+            log1quoted(arg[0]);
+            at_least_one = true;
+        } else
             empties++;
 
         for (let i = 1; i < n; i++) {
             if (js_property_flags(arg, i) & 0x10) {
                 if (empties !== 0) {
-                    if (i > empties)
-                        js_str_print(', ');
-                    js_str_print('<' + empties + ' empty items>, ');
+                    print_empties(at_least_one, empties);
                     empties = 0;
-                } else
-                    js_str_print(', ');
-                log1(arg[i]);
+                }
+                js_str_print(', ');
+                log1quoted(arg[i]);
+                at_least_one = true;
             } else
                 empties++;
         }
 
         if (empties !== 0)
-            js_str_print(', <' + empties + ' empty items>');
+            print_empties(at_least_one, empties);
     }
 
     if (!log3(arg, ', ', ' ]'))
         js_str_print(n ? ' ]' : ']');
+
+    function print_empties (comma, empties) {
+        if (comma)
+            js_str_print(', ');
+        js_str_print('<' + empties + ' empty items>');
+    }
 }
 
 //
@@ -311,20 +330,15 @@ function log4 (obj, key) {
         key2 = _shadow.Symbol_toString.call(key);
     } else {
         key2 = '' + key;
-        // xxx if key starts with a non-letter,
-        // then wrap key with quotes
-        /*if (key2[0] == '5')
-            key2 = '\'' + key2 + '\'';*/
-        /*if (key2 === '__proto__')
-            key2 = '[' + key2 + ']';*/
+        // wrap in quotes if is number or contains non-letters
+        if (key2 === '' + Number(key2))
+            key2 = '\'' + key2 + '\'';
+        else if (key2 === '__proto__')
+            key2 = '[' + key2 + ']';
     }
     js_str_print(key2);
     js_str_print(': ');
-    const val = obj[key];
-    if (typeof(val) === 'string')
-        log1("'" + val + "'");
-    else
-        log1(val);
+    log1quoted(obj[key]);
 }
 
 //

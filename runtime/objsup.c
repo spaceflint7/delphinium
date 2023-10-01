@@ -113,6 +113,11 @@ static js_val js_getOrSetPrototype (js_c_func_args) {
                 // low 3 bits of obj->proto determine obj type
                 proto |= ((uintptr_t)obj_ptr->proto & 7);
                 obj_ptr->proto = (js_obj *)proto;
+
+                // note that if the prototype of an array object
+                // is not equal Array.prototype, then indexing
+                // is done in a slow-path rather than fast-path.
+                // see also js_arr_init ()
             }
         }
     }
