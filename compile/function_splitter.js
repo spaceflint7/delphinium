@@ -201,7 +201,14 @@ function process_function_node (
             const index_in_parent =
                         block.body.indexOf(old_node);
             block.body.splice(index_in_parent, 1);
-            block.body.unshift(old_node);
+
+            // make sure to maintain original order
+            let insert_index = 0;
+            while (block.body.length > insert_index
+                && block.body[insert_index].type
+                            === 'FunctionDeclaration')
+                insert_index++;
+            block.body.splice(insert_index, 0, old_node);
         }
     }
 }

@@ -16,6 +16,8 @@ const statement_writers = {
 
     'ExpressionStatement': expression_statement,
 
+    'LabeledStatement': labeled_statement,
+
     'VariableDeclaration': variable_declaration,
 
     'FunctionDeclaration': function_declaration,
@@ -23,6 +25,7 @@ const statement_writers = {
     'IfStatement': if_statement,
 
     'WhileStatement': while_statement,
+    'DoWhileStatement': while_statement,
 
     'ForStatement': for_statement,
     'ForInStatement': for_statement,
@@ -113,6 +116,37 @@ function expression_statement (stmt, output) {
     stmt.void_result = true;
     const text = write_expression(stmt.expression, false);
     output.push(text + ';');
+}
+
+// ------------------------------------------------------------
+
+function labeled_statement (stmt, output) {
+
+    stmt.c_name = 'lbl_' + utils_c.clean_name(stmt.label)
+                + '_' + utils.get_unique_id();
+
+    // note that statement_writer () does not actually
+    // insert the extra braces for a BlockStatement
+    statement_writer(stmt.body, output, true);
+
+    if (stmt.label_ref_in_continue) {
+        // if the 'continue' flag is set, then assume
+        // the 'body' was a loop control statement,
+        // and output includes the text '//endloop'
+        // where we insert the label with a 'c' suffix.
+        // see also:  break_continue_statement () and
+        // for_statement () and while_statement ()
+        for (let index = output.length; index--; ) {
+            if (output[index] === '}//endloop') {
+                output.splice(
+                    index, 0, stmt.c_name + 'c:;');
+                break;
+            }
+        }
+    }
+
+    if (stmt.label_ref_in_break)
+        output.push(stmt.c_name + 'b:;');
 }
 
 // ------------------------------------------------------------
@@ -411,9 +445,27 @@ function if_statement (stmt, output) {
 
 function while_statement (stmt, output) {
 
+    if (stmt.type === 'DoWhileStatement') {
+
+        output.push('do');
+        statement_writer(stmt.body, output, true);
+        // labeled_statement () expects the following
+        output[output.length - 1] += '//endloop';
+    }
+
     output.push('while');
     output.push(compare_writer.write_condition(stmt.test));
-    statement_writer(stmt.body, output, true);
+
+    if (stmt.type === 'DoWhileStatement') {
+
+        output.push(';');
+
+    } else { // a plain while statement
+
+        statement_writer(stmt.body, output, true);
+        // labeled_statement () expects the following
+        output[output.length - 1] += '//endloop';
+    }
 }
 
 // ------------------------------------------------------------
@@ -486,9 +538,11 @@ function for_statement (stmt, output) {
     output.push('/* update */');
     output.push(update_text + ')');
 
-    if (stmt.loop_body)
+    if (stmt.loop_body) {
         statement_writer(stmt.loop_body, output, true);
-    else
+        // labeled_statement () expects the following
+        output[output.length - 1] += '//endloop';
+    } else
         output.push(';');
 
     //
@@ -608,16 +662,34 @@ function break_continue_statement (stmt, output) {
 
     if (stmt.label !== null) {
 
-        console.log(stmt);
-        throw [ stmt, 'not supported yet - break/continue label' ];
-    }
+        let label = stmt;
+        for (;;) {
+            if (label.type === 'LabeledStatement'
+            &&  label.label.name === stmt.label.name)
+                break;
+            label = label.parent_node;
+            if (!label)
+                throw [ stmt, 'cannot find label' ];
+        }
 
-    if (stmt.type === 'BreakStatement')
-        output.push('break;');
-    else if (stmt.type === 'ContinueStatement')
-        output.push('continue;');
-    else
-        throw [ stmt, 'unknown break/continue type' ];
+        if (stmt.type === 'BreakStatement') {
+            label.label_ref_in_break = true;
+            label = label.c_name + 'b';
+
+        } else if (stmt.type === 'ContinueStatement') {
+            label.label_ref_in_continue = true;
+            label = label.c_name + 'c';
+        }
+
+        output.push(`goto ${label};`);
+
+    } else {
+
+        if (stmt.type === 'BreakStatement')
+            output.push('break;');
+        else if (stmt.type === 'ContinueStatement')
+            output.push('continue;');
+    }
 }
 
 // ------------------------------------------------------------

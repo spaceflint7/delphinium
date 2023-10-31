@@ -89,10 +89,8 @@ function process_parameter (node) {
 
     function process_pattern_parameters (node) {
 
-        if (node.type === 'RestElement') {
-            func_stmt.params_variadic = true;
+        if (node.type === 'RestElement')
             node = node.argument;
-        }
         let node2list;
         if (node.type === 'Identifier')
             node2list = [ node ];
@@ -139,8 +137,11 @@ function process_declarations (node) {
     if (node.parent_node.with_root_node)
         node.with_root_node = node.parent_node.with_root_node;
 
-    if (node.type === 'FunctionDeclaration'
-    ||  node.type === 'ClassDeclaration') {
+    if (node.type === 'FunctionDeclaration') {
+
+        add_local_if_declared_var(node);
+
+    } else if (node.type === 'ClassDeclaration') {
 
         add_local_if_first_in_scope(node);
 
@@ -238,8 +239,19 @@ function add_local_if_declared_var (node) {
             // one special exception is that we allow a 'var'
             // declaration to override the self reference to
             // the function itself, added in process_function ()
-            if (!(is_func_node && check_node === other_node))
-                duplicate_identifier_error(node, other_node);
+            if (!(is_func_node && check_node === other_node)) {
+                // also allow a 'var' declaration to override
+                // any function declaration in the same scope
+                if (other_node.type !== 'FunctionDeclaration')
+                    duplicate_identifier_error(node, other_node);
+
+                else if (node.kind === 'var') {
+                    // a local with this name already exists
+                    // as a result of a function declaration
+                    node.unique_id = other_node.unique_id;
+                    return;
+                }
+            }
         }
 
         if (is_func_node) {
@@ -567,6 +579,14 @@ function process_references (node) {
         // don't try to resolve the name of a function
         // in a function expression;  this identifier
         // is added by process_function (), see there
+        return;
+    }
+
+    if ((   parent_node.type === 'LabeledStatement'
+         || parent_node.type === 'BreakStatement'
+         || parent_node.type === 'ContinueStatement')
+    &&  parent_node.label === node) {
+        // don't try to resolve the name of a label
         return;
     }
 

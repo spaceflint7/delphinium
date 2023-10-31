@@ -88,6 +88,12 @@ exports.write_function = function (func, output) {
         if (var_node.kind === 'var')
             void_vars += `(void)${var_node.c_name};`;
     }
+    // dummy statements to prevent warnings about unused functions
+    for (const child_func of func.child_funcs) {
+        const c_name = child_func?.decl_node?.c_name;
+        if (c_name)
+            void_vars += `(void)${c_name};`;
+    }
     if (void_vars)
         output.push(void_vars);
     output.push(`}//endfunc ${func.c_name}`);
@@ -346,7 +352,8 @@ exports.function_expression = function (expr) {
     const func_where = utils_c.make_function_where(decl_node);
 
     let params_length = decl_node.params.length || 0;
-    if (decl_node.params_variadic && params_length)
+    if (params_length > 0 && 'RestElement' ===
+            decl_node.params[params_length - 1].type)
         params_length--;
     if (params_length >= 0x40000000) {
         // number of parameters must not interfere with

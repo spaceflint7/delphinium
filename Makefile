@@ -38,8 +38,10 @@ all: FORCE
 tests: $(RUNTIME) FORCE
 	@$(MAKE) -s test/suite/array.test
 	@$(MAKE) -s test/suite/bigint.test
+	@$(MAKE) -s test/suite/declarations.test
 	@$(MAKE) -s test/suite/destructuring.test
 	@$(MAKE) -s test/suite/new_constructors.test
+	@$(MAKE) -s test/suite/numeric_loops.test
 	@$(MAKE) -s test/suite/object_expression.test
 	@$(MAKE) -s test/suite/set_property_primitive.test
 	@$(MAKE) -s test/suite/with_scoping.test
