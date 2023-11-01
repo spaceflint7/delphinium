@@ -41,6 +41,8 @@ const statement_writers = {
     'WithStatement': with_statement,
 
     'TryStatement': try_statement,
+
+    'SwitchStatement': switch_statement,
 };
 
 // ------------------------------------------------------------
@@ -790,6 +792,59 @@ function try_statement (stmt, output) {
 
     if (stmt.finalizer)
         statement_writer(stmt.finalizer, output);
+}
+
+// ------------------------------------------------------------
+
+function switch_statement (stmt, output) {
+
+    // create an artificial loop block, to allow for
+    // standard use of 'break' statements within the
+    // generated 'switch', which would actually be a
+    // series of 'if' conditions
+    output.push('do{//switch');
+
+    // use a temp var if the switch discriminant
+    // is not a trivial expression
+    let lhs = write_expression(stmt.discriminant, false);
+    if (!utils.is_basic_expr_node(stmt.discriminant)) {
+        const tmp = utils_c.alloc_temp_value(stmt);
+        output.push(`${tmp}=${lhs};`);
+        lhs = tmp;
+    }
+
+    // write the conditions for each switch case,
+    // with a goto to the corresponding case logic,
+    // but always save the default case for last
+    let def_node;
+    for (const case_node of stmt.cases) {
+        const lbl = case_node.c_name =
+                'lbl_case_' + utils.get_unique_id();
+        if (!case_node.test)
+            def_node = case_node;
+        else {
+            const rhs = write_expression(case_node.test);
+            output.push(`// line ${case_node.loc.start.line}`
+                      + ` column ${case_node.loc.start.column + 1}`);
+            output.push(`if(js_strict_eq(env,${lhs},${rhs}))`
+                      + `goto ${lbl};`);
+        }
+    }
+    if (def_node) {
+        output.push(`// line ${def_node.loc.start.line}`
+                  + ` column ${def_node.loc.start.column + 1}`);
+        output.push(`goto ${def_node.c_name};`);
+    }
+
+    // write the case logic for each case
+    for (const case_node of stmt.cases) {
+        output.push(`// line ${case_node.loc.start.line}`
+                  + ` column ${case_node.loc.start.column + 1}`);
+        output.push(case_node.c_name + ':');
+        statement_writer(case_node.consequent, output);
+    }
+
+    output.push('}while(0);//endswitch');
 }
 
 // ------------------------------------------------------------

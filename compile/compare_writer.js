@@ -121,7 +121,7 @@ function compare_equality (expr) {
     function is_literal (node) {
         if (node.type === 'TemplateLiteral')
             return 'string';
-        if (node.type === 'Literal')
+        if (node.type === 'Literal' && node.value)
             return typeof(node.value);
     }
 

@@ -144,6 +144,8 @@ var get_child_nodes_keys = {
     IfStatement:                [ 'test', 'consequent', 'alternate' ],
     LabeledStatement:           [ 'label', 'body' ],
     ReturnStatement:            [ 'argument' ],
+    SwitchCase:                 [ 'test', 'consequent' ],
+    SwitchStatement:            [ 'discriminant', 'cases' ],
     ThrowStatement:             [ 'argument' ],
     TryStatement:               [ 'block', 'handler', 'finalizer' ],
     WhileStatement:             [ 'test', 'body' ],
