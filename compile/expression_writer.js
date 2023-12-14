@@ -26,6 +26,8 @@ const expression_writers = {
 
     'ArrayExpression': array_expression,
 
+    'YieldExpression': yield_expression,
+
     'UnaryExpression': unary_expression,
 
     'BinaryExpression': binary_expression,
@@ -46,8 +48,9 @@ const expression_writers = {
 
 function literal_expression (expr) {
 
-    if (expr.c_name)
-        return expr.c_name;
+    const text_or_name = expr.c_text || expr.c_name;
+    if (text_or_name)
+        return text_or_name;
 
     if (expr.value === undefined)
         return 'js_undefined';
@@ -138,8 +141,16 @@ function unary_expression (expr) {
     }
 
     if (expr.operator === 'void') {
-        return '(' + expression_writer(expr.argument)
-                   + ',js_undefined)';
+        // if the expression is 'void literal', then
+        // just return 'undefined', to avoid warning
+        // from the c compiler about unused value.
+        // otherwise, compute and discard expression.
+        let result = 'js_undefined';
+        if (expr.argument.type !== 'Literal') {
+            result = '(' + expression_writer(expr.argument)
+                   + ',' + result + ')';
+        }
+        return result;
     }
 
     if (expr.operator === 'typeof') {
@@ -266,7 +277,7 @@ function assignment_expression (expr) {
             for (let elem_ix = 0; elem_ix < elements.length; elem_ix++) {
                 let elem = elements[elem_ix];
                 if (elem_ix > 0)
-                    text += `,js_nextiter(env,${iter})`;
+                    text += `,js_nextiter(env,${iter},js_undefined)`;
                 if (elem === null) // skip element
                     continue;
                 let elem_val = `${iter}[2]`;
@@ -739,6 +750,16 @@ function array_expression (expr) {
     const tmp = utils_c.alloc_temp_value(expr);
     text = `${tmp}=${text},0),`;
     throw [ expr, 'to-impl along with call-spread '];
+}
+
+// ------------------------------------------------------------
+
+function yield_expression (expr) {
+
+    const star = expr.delegate ? '_star' : '';
+    const expr_text = (!expr.argument) ? 'js_undefined'
+                    : expression_writer(expr.argument);
+    return 'js_yield' + star + '(env,' + expr_text + ')';
 }
 
 // ------------------------------------------------------------

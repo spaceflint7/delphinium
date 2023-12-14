@@ -53,8 +53,6 @@
     js_newfunc(env, (c_func), env->str_empty, NULL, \
                js_strict_mode | (num_args), /* closures */ 0)
 
-#define js_c_func_where
-
 // ------------------------------------------------------------
 //
 // environment type
@@ -88,6 +86,10 @@ struct js_environ {
     // write_func_name_hint () in expression_writer.js
     js_val func_name_hint;
 
+    // shapes of an iterator result object
+    js_shape *shape_value_done;
+    js_shape *shape_done_value;
+
     js_link *stack_top;
     int stack_size;
 
@@ -95,6 +97,8 @@ struct js_environ {
 #undef well_known_strings
 
     js_val big_zero;
+
+    int internal_flags;  // various jsf_xxx flags
 
     // end of the public section declared in runtime.h
     int last_public_field;
@@ -123,19 +127,12 @@ struct js_environ {
     int func_length;
     int func_name;
     int func_prototype;
-    // abort on non-strict functions, used during initialization
-    int func_abort_non_strict;
     js_val func_hasinstance;
     js_val func_bound_prefix;
+    js_val func_new_coroutine;
 
     // descriptors
     js_shape *descr_shape;
-    int descr_value;
-    int descr_write;
-    int descr_getter;
-    int descr_setter;
-    int descr_enum;
-    int descr_config;
 
     // arrays
     js_obj *arr_proto;      // Array.prototype
@@ -155,9 +152,11 @@ struct js_environ {
     js_val for_in_iterator;
 };
 
+// ------------------------------------------------------------
 //
 // other source files
 //
+// ------------------------------------------------------------
 
 #include "decls.c"
 
@@ -173,12 +172,15 @@ struct js_environ {
 #include "prop2.c"
 #include "with.c"
 #include "num.c"
-#include "func.c"
 #include "stack.c"
+#include "coroutine.c"
+#include "func.c"
 #include "arr.c"
 #include "big1.c"
 #include "big2.c"
 #include "mix.c"
+#include "except.c"
+#include "iter.c"
 #include "init.c"
 #include "debug.c"
 

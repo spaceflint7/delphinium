@@ -133,14 +133,30 @@ process_function (func_node) {
     // to deduce object shapes in advance.  note that we do
     // this only after c_names have been set for literals.
 
+    this.literal_value = this.map.get('value');
+    this.literal_done  = this.map.get('done');
+
     func_node.visit('ObjectExpression',
                     this.process_object_shape.bind(this));
+
+    //
+    // apply a 'with' scope or a default shape for 'new'.
+    //
+    // note that the 'with_scope' and 'new_shape' fields
+    // in js_func are mutually-exclusive, so the following
+    // two code blocks are in an if-else relationship.
+    //
 
     if (func_node.strict_mode) {
         // js_func->new_shape field (which is set by
         // function_expression () in function_writer.js)
         // but only for strict mode functions
         this.process_constructor_shape(func_node);
+    } else {
+        // for non-strict mode function, the 'with_scope'
+        // field overrides the 'new_shape' field
+        utils_c.text_callback(func_node,
+                        this.with_scope_text_callback);
     }
 
     // convert Identifier nodes, which are really lookups
@@ -206,11 +222,46 @@ process_constructor_shape (func_node) {
     if (!props.length)
         return; // unknown shape
     func_node.this_shape = this.append_shape(props);
+    // install a callback for function_expression ()
+    utils_c.text_callback(func_node,
+                this.constructor_shape_text_callback);
+}
+
+// ------------------------------------------------------------
+
+constructor_shape_text_callback (call_node, decl_node, text) {
+
+    // if function is a constructor and we were able
+    // to calculate an object shape for 'this', then
+    // store the shape in the new function object,
+    // for use by js_callnew () in func.c.  see also
+    // process_constructor_shape () in literals.js
+    let tmp = utils_c.alloc_temp_value(call_node);
+    return `(${tmp}=${text},`
+         + `((js_func*)js_get_pointer(${tmp}))->u.new_shape=`
+         + `(js_shape*)${decl_node.this_shape.c_name},`
+         + `${tmp})`;
+}
+
+// ------------------------------------------------------------
+
+with_scope_text_callback (call_node, decl_node, text) {
+
+    // if non-strict mode, copy 'with' scopes to the new
+    // function.  see also js_scopewith () which looks
+    // for this special bit flag (js_is_flagged_pointer).
+    return `js_scopewith(env,${text},`
+         + '(js_val){.raw=func_val.raw|2})';
 }
 
 // ------------------------------------------------------------
 
 append_shape (props) {
+
+    // check if this is one of the well-known shapes
+    const well_known_shape = this.is_well_known_shape(props);
+    if (well_known_shape)
+        return { c_name: 'env->' + well_known_shape };
 
     const key = props.join(',');
     let shape = this.shapes.get(key);
@@ -223,6 +274,20 @@ append_shape (props) {
     }
 
     return shape;
+}
+
+// ------------------------------------------------------------
+
+is_well_known_shape (props) {
+
+    if (props.length != 2)
+        return;
+    const p0 = props[0];
+    const p1 = props[1];
+    if (p0 === this.literal_value && p1 === this.literal_done)
+        return 'shape_value_done';
+    if (p0 === this.literal_done  && p1 === this.literal_value)
+        return 'shape_done_value';
 }
 
 // ------------------------------------------------------------
@@ -395,8 +460,9 @@ const well_known_strings = [    // see also runtime.h
     'name', 'next', 'null', 'number',
     'object',
     'prototype',
+    'return',
     'set', 'string', 'symbol',
-    'toString', 'true',
+    'throw', 'toString', 'true',
     'undefined',
     'value', 'valueOf',
     'writable'

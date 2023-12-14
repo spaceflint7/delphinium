@@ -714,9 +714,11 @@ static void js_str_init (js_environ *env) {
     declare_string(number);
     declare_string(object);
     declare_string(prototype);
+    declare_string(return);
     declare_string(set);
     declare_string(string);
     declare_string(symbol);
+    declare_string(throw);
     declare_string(toString);
     declare_string(true);
     declare_string(undefined);

@@ -235,9 +235,17 @@ struct js_link {
     int depth;
 };
 
+#define js_link_allocated   0x40000000U
+#define js_link_depth(link) ((link)->depth & 0x3FFFFFFFU)
+
 void js_growstack (js_environ *env, js_link *stk, int needed);
 
 #define js_stk_top (env->stack_top)
+
+#define js_ensure_stack_at_least(n)             \
+    if (unlikely(env->stack_size -              \
+            js_link_depth(js_stk_top) < (n)))   \
+        js_growstack(env, js_stk_top, (n));
 
 // reset the flagged function object on the stack,
 // restore stack pointer to the caller-saved value,
@@ -258,7 +266,7 @@ void js_spreadargs (js_environ *env, js_val iterable);
 void js_newiter (js_environ *env, js_val *new_iter,
                  int kind, js_val iterable_expr);
 
-void js_nextiter (js_environ *env, js_val *iter);
+void js_nextiter (js_environ *env, js_val *iter, js_val arg);
 
 //
 // function
@@ -298,6 +306,13 @@ js_val *js_newclosure (js_environ *env, js_val *old_val);
 
 js_val *js_closureval (js_environ *env,
                        js_val func_val, int closure_index);
+
+js_val js_newcoroutine (js_environ *env,
+                        int kind, js_val func);
+
+js_val js_yield (js_environ *env, js_val val);
+
+js_val js_yield_star (js_environ *env, js_val iterable_val);
 
 //
 // object/array
@@ -385,9 +400,11 @@ js_val js_boxthis (js_environ *env, js_val this_val);
     js_val str_number;          \
     js_val str_object;          \
     js_val str_prototype;       \
+    js_val str_return;          \
     js_val str_set;             \
     js_val str_string;          \
     js_val str_symbol;          \
+    js_val str_throw;           \
     js_val str_toString;        \
     js_val str_true;            \
     js_val str_undefined;       \
@@ -430,6 +447,10 @@ struct js_environ {
     // write_func_name_hint () in expression_writer.js
     js_val func_name_hint;
 
+    // shapes of an iterator result object
+    js_shape *shape_value_done;
+    js_shape *shape_done_value;
+
     js_link *stack_top;
     int stack_size;
 
@@ -437,6 +458,8 @@ struct js_environ {
 #undef well_known_strings
 
     js_val big_zero;
+
+    int internal_flags;  // flags for internal use
 
     // end of the public section declared in runtime.h
     int last_public_field;

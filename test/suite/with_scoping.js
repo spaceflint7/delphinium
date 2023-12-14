@@ -63,3 +63,14 @@ with (o2) {
     [ ,, testProperty] = [ 123, 456, 789 ];
 }
 console.log(o2);
+
+// generator function scoped by 'with'
+let gen_scope = { gen_prop: '_gen_prop_' };
+let gen_func;
+with (gen_scope) {
+  gen_func = function* gen () {
+    yield gen_prop;
+  }
+}
+gen_scope = {};
+console.log(gen_func().next());

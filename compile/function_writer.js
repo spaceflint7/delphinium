@@ -46,6 +46,13 @@ exports.write_function = function (func, output) {
     output.splice(++insert_index, 0,
         'stk_args->value.raw=func_val.raw|2;');
 
+    // if coroutine, yield execution at this point,
+    // see also js_coroutine_init3 () in coroutine.c
+    if (func.inject_call_to_yield) {
+        output.splice(++insert_index, 0,
+                    'js_yield(env,js_make_number(0.));');
+    }
+
     // initialize local references to arguments passed
     if (param_locals.length) {
         while (param_locals.length)
@@ -57,8 +64,7 @@ exports.write_function = function (func, output) {
     if (max_args_in_calls >= 0) {
         // number of stack links needed, plus some spare room
         const n = max_args_in_calls + 4;
-        const stk_decl = `if(unlikely(env->stack_size-js_stk_top->depth<${n}))`
-                       + `js_growstack(env,js_stk_top,${n});`
+        const stk_decl = `js_ensure_stack_at_least(${n});`
         output.splice(++insert_index, 0, stk_decl);
     }
 
@@ -334,11 +340,16 @@ exports.write_module_entry_point = function (func, output) {
     output.push('// ------------------------------------------------------------');
     output.push('js_val js_main(js_c_func_args){');
     output.push('init_literals(env);');
+    const blk = {   type: 'BlockStatement',
+                    parent_node: func,
+                    inhibit_braces: true,
+                    scope: new Map(), temp_vals: [] };
     const stmt = { type: 'ReturnStatement',
                    argument: { type: 'FunctionExpression',
                                decl_node: func,
-                               parent_node: func } };
-    write_statements(stmt, output);
+                               parent_node: blk } };
+    blk.body = [ stmt ];
+    write_statements(blk, output);
     output.push('}');
 }
 
@@ -360,8 +371,14 @@ exports.function_expression = function (expr) {
         // any flag bits that share the 'arity' parameter
         throw [ expr, 'too many parameters' ];
     }
-    const arity = (decl_node.strict_mode ? 'js_strict_mode|' : '')
-                + params_length;
+
+    let arity = '' + params_length;
+    if (decl_node.strict_mode)
+        arity = 'js_strict_mode|' + arity;
+    if (decl_node.not_constructor) {
+        // arrow/generator/async functions
+        arity = 'js_not_constructor|' + arity;
+    }
 
     // number of shape cache variables required,
     // determined by get_shape_variable () in utils_c.js
@@ -377,31 +394,11 @@ exports.function_expression = function (expr) {
     let text = `js_newfunc(env,${func_name},${func_descr},${func_where},`
          + `${arity},${shapes}${closure})`;
 
-    // apply a 'with' scope or a default shape for 'new'.
-    //
-    // note that the 'with_scope' and 'new_shape' fields
-    // in js_func are mutually-exclusive, so the following
-    // two code blocks are in an if-else relationship.
-    //
-    // if non-strict mode, copy 'with' scopes to the new
-    // function.  see also js_scopewith () which looks
-    // for this special bit flag (js_is_flagged_pointer).
-    if (!decl_node.strict_mode) {
-        text = `js_scopewith(env,${text},`
-             + '(js_val){.raw=func_val.raw|2})';
-
-    } else if (decl_node.this_shape) {
-        // if function is a constructor and we were able
-        // to calculate an object shape for 'this', then
-        // store the shape in the new function object,
-        // for use by js_callnew () in func.c.  see also
-        // process_constructor_shape () in literals.js
-        const shape = decl_node.this_shape.c_name;
-        let tmp = utils_c.alloc_temp_value(expr);
-        text = `(${tmp}=${text},`
-             + `((js_func*)js_get_pointer(${tmp}))->u.new_shape=`
-             + `(js_shape*)${decl_node.this_shape.c_name},`
-             + `${tmp})`;
+    // invoke text editing callbacks, e.g. from
+    // process_constructor_shape ()
+    if (decl_node.text_callbacks) {
+        for (const cb of decl_node.text_callbacks)
+            text = cb(expr, decl_node, text);
     }
 
     return text;
@@ -508,4 +505,25 @@ exports.meta_property_expression = function (expr) {
     }
 
     throw [ expr, 'invalid meta property' ];
+}
+
+// ------------------------------------------------------------
+
+exports.convert_to_coroutine = function (func) {
+
+    func.not_constructor = true;
+    func.inject_call_to_yield = true;
+
+    let kind = 0;
+    if (func.async)
+        kind += 1;
+    if (func.generator)
+        kind += 2;
+
+    utils_c.text_callback(func,
+
+        (call_node, decl_node, text) =>
+
+            `js_newcoroutine(env,${kind},${text})`
+        );
 }

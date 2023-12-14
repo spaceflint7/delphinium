@@ -118,7 +118,7 @@ function unwrap_object_wrapper (obj, primitiveType) {
     if (typeof(obj) === primitiveType)
         return obj;
 
-    // extract the bigint value if this is a bigint
+    // extract the bigint value if this is a primitive
     // wrapped in an object (see Object () constructor),
     // otherwise calls TypeError_incompatible_object ()
     const private_object = js_private_object(
@@ -130,6 +130,14 @@ function unwrap_object_wrapper (obj, primitiveType) {
     }
 
     return private_object;
+}
+
+// ------------------------------------------------------------
+
+_shadow.for_in_iterator = function for_in_iterator (obj) {
+
+    console.log('utils.js: for_in not yet implemented');
+    return [];
 }
 
 // ------------------------------------------------------------

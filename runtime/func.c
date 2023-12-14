@@ -1,4 +1,6 @@
 
+#define jsf_abort_if_non_strict 1
+
 // ------------------------------------------------------------
 //
 // js_newfunc
@@ -98,7 +100,7 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
 
         // helper code to detect any non-strict functions
         // declared during initialization, and abort
-        if (env->func_abort_non_strict) {
+        if (env->internal_flags & jsf_abort_if_non_strict) {
             fprintf(stderr, "Non-strict function!\n");
             exit(1); // __builtin_trap();
         }
@@ -119,7 +121,11 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
     //          enumerable: false, configurable: true }
     //
 
-    if (!(func->flags & js_not_constructor)) {
+    if (func->flags & js_not_constructor) {
+
+        values[env->func_prototype] = js_deleted;
+
+    } else {
 
         js_val new_proto =
             js_newobj(env, env->func_shape2,
@@ -467,8 +473,7 @@ static js_val js_callfunc1 (
                         js_val this_val, js_val arg_val) {
 
     // we need just two stack slots, but make extra room
-    if (unlikely(env->stack_size - js_stk_top->depth < 4))
-        js_growstack(env, js_stk_top, 4);
+    js_ensure_stack_at_least(4);
 
     // per our calling convention, the link at stk_top
     // is reserved for func_val, and the link after that
@@ -489,7 +494,7 @@ static js_val js_callfunc1 (
 //
 // js_callshadow
 //
-// calls a function defined as a proprty of the 'shadow'
+// calls a function defined as a property of the 'shadow'
 // object, which is a mechanism for 'runtime2.js' to expose
 // functions that we can reliably call (e.g. invoking Error
 // constructors), even if the js program corrupts properties
@@ -814,4 +819,9 @@ static void js_func_init (js_environ *env) {
     js_newprop(env, env->shadow_obj,
             js_str_c(env, "js_flag_as_not_constructor")) =
                 js_unnamed_func(js_flag_as_not_constructor, 1);
+
+    // expose the utility function 'js_coroutine'
+    js_newprop(env, env->shadow_obj,
+        js_str_c(env, "js_coroutine")) =
+            js_unnamed_func(js_coroutine, 2);
 }

@@ -286,7 +286,7 @@ static void js_obj_init_2 (js_environ *env) {
         js_str_c(env, "js_property_flags")) =
             js_unnamed_func(js_property_flags, 2);
 
-    // shadow.js_privateObject
+    // shadow.js_private_object
     js_newprop(env, shadow,
         js_str_c(env, "js_private_object")) =
             js_unnamed_func(js_private_object, 1);

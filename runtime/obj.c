@@ -269,4 +269,14 @@ static void js_obj_init (js_environ *env) {
 
     // allocate the shadow object
     env->shadow_obj = js_emptyobj(env);
+
+    // allocate the well-known iterator result shapes
+    js_val iter_obj = js_emptyobj(env);
+    js_newprop(env, iter_obj, env->str_value)   = js_make_number(0.0);
+    js_newprop(env, iter_obj, env->str_done)    = js_make_number(0.0);
+    env->shape_value_done = ((js_obj *)js_get_pointer(iter_obj))->shape;
+    iter_obj = js_emptyobj(env);
+    js_newprop(env, iter_obj, env->str_done)    = js_make_number(0.0);
+    js_newprop(env, iter_obj, env->str_value)   = js_make_number(0.0);
+    env->shape_done_value = ((js_obj *)js_get_pointer(iter_obj))->shape;
 }

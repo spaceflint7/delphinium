@@ -80,6 +80,7 @@ function process_parameter (node) {
         }
 
         node.unique_id = utils.get_unique_id();
+        node.is_parameter = true;
         node.scope.set(node.name, node);
     }
 
@@ -175,6 +176,7 @@ function process_declarations (node) {
 
     } else if (node.type === 'CatchClause') {
 
+        node.scope = new Map();
         declare_catch_variable(node);
 
     } else if (node.type === 'WithStatement') {
@@ -192,7 +194,7 @@ function add_local_if_first_in_scope (node) {
         missing_identifier_error(node);
 
     const other_node = node.scope.get(name);
-    if (other_node)
+    if (other_node && !other_node.is_catch_variable)
         duplicate_identifier_error(node, other_node);
 
     node.unique_id = utils.get_unique_id();
@@ -527,6 +529,8 @@ function declare_catch_variable (node) {
             type: 'VariableDeclarator',
             id: node.param,
             init: null,
+            loc: node.loc,
+            is_catch_variable: true,
             parent_node: null,
         } ],
         parent_node: node,
@@ -702,6 +706,14 @@ function check_uninitialized_reference (ref_node, decl_node) {
     // the initialization expression of itself
     let error = utils.is_descendant_of(ref_node, decl_node);
 
+    if (error) {
+        // ignore an error caused by a function name node
+        // that was created by determine_function_name ()
+        if (ref_node.is_function_name &&
+                ref_node.parent_node.not_constructor)
+                        error = false;
+    }
+
     if (!error) {
 
         const block = utils.get_parent_block_node(ref_node, false);
@@ -845,3 +857,8 @@ module.exports = function resolve_all_variables (functions) {
             process_function(func);
     }
 }
+
+// ------------------------------------------------------------
+
+module.exports.add_closure_variable = add_closure_variable;
+module.exports.add_closure_function = add_closure_function;

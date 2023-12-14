@@ -63,7 +63,8 @@ function block_statement (stmt, output) {
     // would be allocated by 'alloc_temp_val' in utils_c,
     // while processing statements within the block
 
-    output.push('{');
+    if (!stmt.inhibit_braces)
+        output.push('{');
     let temp_index = output.length;
 
     stmt.temp_vals = [];
@@ -105,7 +106,8 @@ function block_statement (stmt, output) {
             output.push(`(void)${var_node.c_name};`);
     }
 
-    output.push('}');
+    if (!stmt.inhibit_braces)
+        output.push('}');
 }
 
 // ------------------------------------------------------------
@@ -652,7 +654,7 @@ function for_statement (stmt, output) {
             + `?(${deref}${c_name}=${iter}[2],true):false`;
 
         stmt.update = `(void)${c_name},`
-                    + `js_nextiter(env,${iter})`;
+                    + `js_nextiter(env,${iter},js_undefined)`;
 
         return node;
     }
@@ -709,6 +711,9 @@ function throw_statement (stmt, output) {
 
 function return_statement (stmt, output) {
 
+    if (return_inside_try(stmt, output))
+        return;
+
     if (stmt.parent_node
     && !utils.get_parent_func_node(stmt).strict_mode) {
         // if not strict mode function, then js_arguments ()
@@ -726,6 +731,60 @@ function return_statement (stmt, output) {
                     : 'js_undefined';
     // discard last stack frame and return an expression
     output.push(`js_return(${expr_text});`);
+
+    //
+    // if the return statement appears within try/catch
+    // block, we store the return value in a temporary
+    // variable, and 'throw' without actually specifying
+    // an exception, i.e. the exception value is set to
+    // js_uninitialized.  see also try_statement ()
+    //
+
+    function return_inside_try (stmt, output) {
+
+        // check if 'return' inside 'try/catch'
+        for (let node2 = stmt;;) {
+            const last_node = node2;
+            node2 = node2.parent_node;
+            if (!node2 || node2.is_func_node)
+                return false;
+            if (node2.type === 'TryStatement') {
+                if (node2.finalizer === last_node) {
+                    // if the 'return' appears inside the
+                    // finalizer block, then it is already
+                    // after unwinding the exception state
+                    // (via the call to js_leavetry ()),
+                    // so we don't consider this instance
+                    // as a 'return' inside a try block.
+                    // but, we do have to keep looking.
+                    continue;
+                }
+                node2.nested_return = true;
+                break;
+            }
+        }
+
+        // allocate a temporary variable
+        const func_node = utils.get_parent_func_node(stmt);
+        let throw_ret_var = func_node.throw_ret_var;
+        if (!throw_ret_var) {
+
+            throw_ret_var = 'tmp_' + utils.get_unique_id();
+            utils_c.insert_init_text(func_node.body,
+                        'js_val ' + throw_ret_var +
+                        '=js_uninitialized;//tmp_ret_var');
+            func_node.throw_ret_var = throw_ret_var;
+        }
+
+        const expr_text = stmt.argument
+                        ? write_expression(stmt.argument)
+                        : 'js_undefined';
+        output.push('js_throw(env,'
+                   + `((${throw_ret_var}=${expr_text}),`
+                   + 'js_uninitialized));');
+
+        return true;
+    }
 }
 
 // ------------------------------------------------------------
@@ -747,7 +806,7 @@ function with_statement (stmt, output) {
 function try_statement (stmt, output) {
 
     output.push('if(setjmp(*js_entertry(env))==0){');
-    statement_writer(stmt.block, output);
+    statement_writer(stmt.block, output, false);
     output.push('}');
 
     const handler = stmt.handler;
@@ -768,7 +827,6 @@ function try_statement (stmt, output) {
             if (handler.param.type !== 'VariableDeclaration')
                 throw [ stmt, 'unexpected catch clause' ];
 
-            // destructuring should also be permitted here
             const var_decl = handler.param.declarations[0];
             var_decl.skip_void_reference = true;
             var_decl.init = {
@@ -792,6 +850,42 @@ function try_statement (stmt, output) {
 
     if (stmt.finalizer)
         statement_writer(stmt.finalizer, output);
+
+    //
+    // if there is a 'return' statement within this
+    // 'try' block (even if inside some nested 'try'),
+    // then that converted into a throw, see also
+    // return_inside_try ().  in this case, we need
+    // to implement that 'return' at this point.
+    //
+
+    if (stmt.nested_return) {
+
+        let is_inside_try, throw_ret_var;
+        for (let node2 = stmt;;) {
+            node2 = node2.parent_node;
+            if (node2.is_func_node) {
+                // if any 'try' includes a nested return,
+                // then a temporary variable to hold the
+                // return value was already allocated,
+                // see also return_inside_try ()
+                throw_ret_var = node2.throw_ret_var;
+                break;
+            }
+            if (node2.type === 'TryStatement') {
+                // propagate the flag that this 'try'
+                // block includes a nested return
+                node2.nested_return = true;
+                is_inside_try = true;
+            }
+        }
+
+        output.push(`if(${throw_ret_var}.raw!=js_uninitialized.raw)`);
+        if (is_inside_try)
+            output.push('js_throw(env,js_uninitialized);');
+        else
+            output.push(`js_return(${throw_ret_var});`);
+    }
 }
 
 // ------------------------------------------------------------

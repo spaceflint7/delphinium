@@ -490,6 +490,7 @@ exports.logical_expression = function (expr) {
             left = tmp;
         }
 
+        expr.can_accept_c_bool = false;
         let right = expression_writer(expr.right);
         switch (expr.operator) {
 
@@ -604,7 +605,7 @@ function logical_not_expression (expr) {
     // from its own child, if applicable.  for example:
     //      if (!(a==b))
 
-    const text = expression_writer(expr.argument);
+    let text = expression_writer(expr.argument);
 
     if (expr.result_is_c_bool) {
 
@@ -616,7 +617,18 @@ function logical_not_expression (expr) {
     if (expr.called_from_write_condition)
         return text;
 
-    return `js_is_falsy(${text})?js_true:js_false`;
+    // use a temp var if left is a non-trivial expression
+    let prefix = '';
+    let suffix = '';
+    if (!utils.is_basic_expr_node(expr.argument)) {
+        const tmp = utils_c.alloc_temp_value(expr);
+        prefix = '(' + tmp + '=' + text + ',';
+        suffix = ')';
+        text = tmp;
+    }
+
+    text = `js_is_falsy(${text})?js_true:js_false`;
+    return prefix + text + suffix;
 }
 
 // ------------------------------------------------------------

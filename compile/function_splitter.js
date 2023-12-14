@@ -122,8 +122,15 @@ function determine_function_name (func_node) {
             func_node.id = {
                 type: 'Identifier',
                 name: id_node.name,
-                parent_node: func_node
+                loc: func_node.loc,
+                parent_node: func_node,
+                is_function_name: true,
             };
+
+            // an annonymous function can also be an arrow
+            // function, which should be marked non-constructor
+            if (func_node.type === 'ArrowFunctionExpression')
+                func_node.not_constructor = true;
         }
     }
 }

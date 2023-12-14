@@ -172,5 +172,6 @@ var get_child_nodes_keys = {
     ThisExpression:             [],
     UnaryExpression:            [ 'argument' ],
     UpdateExpression:           [ 'argument' ],
+    YieldExpression:            [ 'argument' ],
 
 };

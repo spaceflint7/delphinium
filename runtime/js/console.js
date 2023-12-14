@@ -73,8 +73,15 @@ function log2func (arg) {
 
     if (arg === _shadow.Function.prototype)
         return log2obj(arg);
-    js_str_print('[Function');
-    if (js_getOrSetPrototype(arg) === null) {
+
+    let func_proto = js_getOrSetPrototype(arg);
+
+    let func_class = '[Function';
+    if (func_proto === _shadow.GeneratorFunction)
+        func_class = '[GeneratorFunction';
+    js_str_print(func_class);
+
+    if (func_proto === null) {
         js_str_print(' (');
         js_str_print('null prototype');
         js_str_print(')');
@@ -147,7 +154,6 @@ function log2arr (arg) {
 
 function log2obj (arg) {
 
-    let pfx = '';
     const proto = js_getOrSetPrototype(arg);
 
     let tag = is_primitive_wrapper(arg);
@@ -157,18 +163,17 @@ function log2obj (arg) {
         return;
     }
 
-    tag = get_constructor_name(proto);
+    tag = get_constructor_name(proto, arg);
     if (typeof(tag) !== 'string') {
 
         tag = arg[Symbol.toStringTag];
-        if (typeof(tag) === 'string')
-            pfx = 'Object ';
-        else {
+        if (typeof(tag) !== 'string') {
             tag = _shadow.Object_getSpecialTag(arg) || '';
             if (tag === 'Arguments')
                 tag = '[' + tag + ']';
         }
-        tag += ' ';
+        if (tag)
+            tag += ' ';
     }
 
     js_str_print(tag + '{');
@@ -190,14 +195,24 @@ function log2obj (arg) {
     }
 
     //
-    function get_constructor_name (proto) {
+    function get_constructor_name (proto, arg) {
 
         if (proto === null)
             return '[Object: null prototype] ';
+
+        if (    arg === _shadow.Generator.prototype
+            ||proto === _shadow.Generator.prototype)
+            return 'Object [Generator] ';
+
         if ((js_property_flags(proto, 'constructor') & 0x10)
         &&  (js_property_flags(proto.constructor, 'name') & 0x10)) {
+
             let name = proto.constructor.name;
-            if (name === 'Object')
+            if (proto === Function.prototype) {
+                const tag = arg[Symbol.toStringTag];
+                if (tag)
+                    name = 'Function [' + tag + ']';
+            } else if (name === 'Object')
                 name = '';
             if (name)
                 name += ' ';
@@ -327,7 +342,7 @@ function log4 (obj, key) {
     if (typeof(key) === 'symbol') {
         // we don't call key.toString() here, in case
         // Symbol.prototype.toString was overridden
-        key2 = _shadow.Symbol_toString.call(key);
+        key2 = '[' + _shadow.Symbol_toString.call(key) + ']';
     } else {
         key2 = '' + key;
         // wrap in quotes if is number or contains non-letters

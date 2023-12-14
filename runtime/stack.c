@@ -29,7 +29,7 @@ static void js_stack_init (js_environ *env) {
     head->value.raw = 0;
     head->prev = NULL;
     head->next = head + 1;
-    head->depth = 0;
+    head->depth = js_link_allocated;
     // tail entry, should never actually be used
     head->next->value.raw = 0;
     head->next->prev = head;
@@ -58,7 +58,8 @@ void js_growstack (js_environ *env, js_link *stk, int needed) {
         exit(1);
     }
 
-    int extra_links = needed - (env->stack_size - stk->depth);
+    int extra_links = needed -
+            (env->stack_size - js_link_depth(stk));
     if (extra_links > 0) {
         extra_links += 7;
         env->stack_size += extra_links;
@@ -66,27 +67,80 @@ void js_growstack (js_environ *env, js_link *stk, int needed) {
         // advance the 'depth' on all existing 'next' links
         js_link *stk_next = stk->next;
         js_link *old_link = stk_next;
-        do {
+        while (old_link) {
             old_link->depth += extra_links;
             old_link = old_link->next;
-        } while (old_link);
+        }
         old_link = stk->next;
 
         // allocate all the additional links at once
         js_link *new_link =
-                js_malloc(extra_links * sizeof(js_link));
+            js_malloc(extra_links * sizeof(js_link));
 
         // attach the new links into the stack
         old_link = stk;
         while (extra_links --> 0) {
-            new_link->depth = old_link->depth + 1;
+            new_link->depth =
+                        js_link_depth(old_link) + 1;
             new_link->prev = old_link;
             old_link->next = new_link;
             old_link = new_link++;
         }
+        // mark the first new link as allocated
+        stk->next->depth |= js_link_allocated;
         // link the last one of the new elements
         old_link->next = stk_next;
     }
+}
+
+// ------------------------------------------------------------
+//
+// js_copystack
+//
+// create a copy of the stack entries starting with the
+// 'first' element, and until, but excluding, the 'last'
+// elements.  on return, the parameters are updated to
+// point to the newly-created first and last elements.
+//
+// ------------------------------------------------------------
+
+int js_copystack (js_link **p_first, js_link **p_last) {
+
+    // count how many links to copy
+    js_link *end_ptr = *p_last;
+    js_link *stk_ptr = *p_first;
+    int num_links = 1; // count the tail element
+    while (stk_ptr != end_ptr) {
+        num_links++;
+        stk_ptr = stk_ptr->next;
+    }
+
+    // allocate all the additional links at once
+    js_link *new_link =
+            js_malloc(num_links * sizeof(js_link));
+    new_link->prev = NULL;
+    new_link->depth = js_link_allocated;
+    int next_depth = 1;
+    stk_ptr = *p_first;
+    *p_first = new_link;
+
+    // copy links into the newly allocated space
+    while (stk_ptr != end_ptr) {
+        js_link *next_link = new_link + 1;
+        next_link->prev = new_link;
+        new_link->value = stk_ptr->value;
+        new_link->next = next_link;
+        new_link = next_link;
+        new_link->depth = next_depth++;
+        stk_ptr = stk_ptr->next;
+    }
+
+    // create the tail element
+    new_link->value.raw = 0;
+    new_link->next = NULL;
+    new_link->depth = next_depth;
+    *p_last = new_link;
+    return next_depth;
 }
 
 // ------------------------------------------------------------
@@ -207,231 +261,6 @@ void js_arguments2 (js_environ *env, js_val func_val,
     func_descr->data_or_getter = func_val;
 }
 
-// ------------------------------------------------------------
-//
-// js_spreadargs
-//
-// ------------------------------------------------------------
-
-void js_spreadargs (js_environ *env, js_val iterable) {
-
-    //
-    // fast-path if iterable is a typical fast-path array.
-    //
-
-    /*if (js_is_object(iterable)) {
-
-        js_obj *obj_ptr = (js_obj *)js_get_pointer(iterable);
-        uintptr_t proto = (uintptr_t)obj_ptr->proto;
-        uint32_t length;
-        if (likely(proto == (uintptr_t)env->fast_arr_proto
-               && (-1U != (length =
-                            ((js_arr *)obj_ptr)->length)))) {
-            //
-            // push each array element from 0 to 'length'
-            //
-            js_val *values = ((js_arr *)obj_ptr)->values;
-            js_growstack(env, js_stk_top, length);
-            while (length != 0) {
-                length--;
-                js_stk_top->value = *values++;
-                js_stk_top = js_stk_top->next;
-            }
-
-            return;
-        }
-    }*/
-
-    //
-    // iterate the object via Symbol.iterator.  note that
-    // this is true for arrays, because the the iterator
-    // might be overridden on the array object itself, or
-    // on Array.prototype or even Object.prototype.
-    //
-
-    int64_t dummy_shape_cache;
-    js_val iterator = js_getprop(env, iterable,
-                                 env->sym_iterator,
-                                &dummy_shape_cache);
-
-    if (js_is_object(iterator) &&
-            js_obj_is_exotic(js_get_pointer(iterator),
-                             js_obj_is_function)) {
-
-        iterator = js_callfunc1(env, iterator,
-                                iterable, js_undefined);
-        if (js_is_object(iterator)) {
-
-            js_val next = js_getprop(env, iterator,
-                                     env->str_next,
-                                    &dummy_shape_cache);
-
-            if (js_is_object(next) &&
-                js_obj_is_exotic(js_get_pointer(next),
-                                    js_obj_is_function)) {
-
-                //
-                // an iterator function returned an iterable
-                // object with a next () function, so keep
-                // calling this function, and pushing its
-                // result 'value' into the stack, until it
-                // returns a result with 'done' set to true
-                //
-
-                for (;;) {
-
-                    js_val result = js_callfunc1(
-                        env, next, iterator, js_undefined);
-
-                    if (!js_is_object(result))
-                        js_callthrow("TypeError_iterator_result");
-
-                    if (js_is_truthy(js_getprop(
-                                    env, result, env->str_done,
-                                   &dummy_shape_cache)))
-                        return;
-
-                    js_stk_top->value = js_getprop(
-                                    env, result, env->str_value,
-                                   &dummy_shape_cache);
-                    js_stk_top = js_stk_top->next;
-                }
-            }
-        }
-    }
-
-    //
-    //
-    //
-
-    js_callthrow("TypeError_not_iterable");
-}
-
-// ------------------------------------------------------------
-//
-// js_newiter
-//
-// prepares an iterator for consumption by a loop, e.g.
-// for_statement () in statement_writer.js, in the case
-// of a for-of / for-in loop.  parameter 'new_iter' should
-// points to an array of three values:
-// new_iter[0] is the next () function for this iterator;
-// new_iter[1] is a reference to the iterator object;
-// new_iter[2] receives the next result value, if not done.
-//
-// ------------------------------------------------------------
-
-void js_newiter (js_environ *env, js_val *new_iter,
-                 int kind, js_val iterable_val) {
-
-    int64_t dummy_shape_cache;
-
-    // if we fail, make sure we return a non-callable result
-    new_iter[0].raw = 0;
-
-    if (kind == 'I') {
-
-        //
-        // for-in iterator
-        //
-        // locate the _shadow.for_in_iterator function,
-        // provided by runtime2.js
-        if (!env->for_in_iterator.raw) {
-            env->for_in_iterator = js_getprop(
-                            env, env->shadow_obj,
-                            js_str_c(env, "for_in_iterator"),
-                            &dummy_shape_cache);
-        }
-
-        // the for_in_iterator () function creates an iterator
-        // which enumerates the keys of the specifieid object
-        new_iter[1] = js_callfunc1(env, env->for_in_iterator,
-                                   js_undefined, iterable_val);
-
-    } else {
-
-        //
-        // for-of iterator
-        //
-        // invoke [Symbol.iterator] on the specified object
-
-        js_val method = js_getprop(env, iterable_val,
-                                   env->sym_iterator,
-                                  &dummy_shape_cache);
-
-        if (js_is_object(method)
-        &&  js_obj_is_exotic(js_get_pointer(method),
-                             js_obj_is_function)) {
-
-            new_iter[1] = js_callfunc1(
-                            env, method, iterable_val,
-                            js_undefined);
-
-        } else {
-            // make sure the check below fails,
-            // and we end up throwing an error
-            new_iter[1].raw = 0;
-        }
-    }
-
-    //
-    // the iterator object at new_iter[1] must be an
-    // object, and must provide a next () function
-    //
-
-    if (js_is_object(new_iter[1])) {
-
-        js_val method = js_getprop(env, new_iter[1],
-                                   env->str_next,
-                                  &dummy_shape_cache);
-
-        if (js_is_object(method)
-        &&  js_obj_is_exotic(js_get_pointer(method),
-                             js_obj_is_function)) {
-
-            new_iter[0] = method;
-            js_nextiter(env, new_iter);
-            return;
-        }
-    }
-
-    // fail because the specified value is not iterable
-
-    js_callthrow("TypeError_not_iterable");
-}
-
-// ------------------------------------------------------------
-//
-// js_nextiter
-//
-// steps an iterator prepared by js_newiter (), see above.
-// the caller should check that iter[0] is non-zero,
-// before assuming that iter[2] holds the next value.
-//
-// ------------------------------------------------------------
-
-void js_nextiter (js_environ *env, js_val *iter) {
-
-    js_val result = js_callfunc1(
-                        env, /* next () func */ iter[0],
-                        /* this */ iter[1], js_undefined);
-
-    if (!js_is_object(result))
-        js_callthrow("TypeError_iterator_result");
-
-    int64_t dummy_shape_cache;
-
-    if (js_is_truthy(js_getprop(env, result, env->str_done,
-                               &dummy_shape_cache))) {
-        // terminate iteration
-        iter[0].raw = 0;
-
-    } else {
-        // return next result
-        iter[2] = js_getprop(env, result, env->str_value,
-                            &dummy_shape_cache);
-    }
-}
 
 // ------------------------------------------------------------
 //
@@ -533,191 +362,4 @@ static js_val js_stack_trace (js_c_func_args) {
             break;
     }
     js_return(arr);
-}
-
-// ------------------------------------------------------------
-//
-// 'try' exception handler
-//
-// ------------------------------------------------------------
-
-struct js_try {
-
-    js_try *parent_try;
-    js_link *stack_top;
-    js_val throw_val;
-    jmp_buf jmp_buf;
-};
-
-// ------------------------------------------------------------
-//
-// js_entertry
-//
-// ------------------------------------------------------------
-
-jmp_buf *js_entertry (js_environ *env) {
-
-    js_try *try = js_malloc(sizeof(js_try));
-    try->parent_try = env->try_handler;
-    try->stack_top = env->stack_top;
-    try->throw_val = js_uninitialized;
-
-    env->try_handler = try;
-    return &try->jmp_buf;
-}
-
-// ------------------------------------------------------------
-//
-// js_leavetry
-//
-// ------------------------------------------------------------
-
-js_val js_leavetry (js_environ *env) {
-
-    js_try *try = env->try_handler;
-    js_val throw_val = try->throw_val;
-    env->try_handler = try->parent_try;
-    free(try);
-    return throw_val;
-}
-
-// ------------------------------------------------------------
-//
-// js_throw
-//
-// ------------------------------------------------------------
-
-js_val js_throw (js_environ *env, js_val throw_val) {
-
-    js_try *try = env->try_handler;
-    try->throw_val = throw_val;
-
-    // if the current function was called via js_callnew (),
-    // then it will not return properly and reset new.target
-    env->new_target = js_undefined;
-
-    // func_name_hint should be undefined, but make sure
-    env->func_name_hint = js_undefined;
-
-    // walk back along the stack, to reset the 'arguments'
-    // property for called function objects, because the
-    // longjmp () at the end of this function is going to
-    // prevent the normal way that 'arguments' gets reset.
-    // see also return_statement () in statement_writer.js
-    for (js_link *stk_ptr = js_stk_top;;) {
-
-        if (stk_ptr == try->stack_top) {
-            js_stk_top = stk_ptr;
-            break;
-        }
-
-        stk_ptr = js_walkstack(stk_ptr);
-
-        const js_func *func =
-                (js_func *)js_get_pointer(stk_ptr->value);
-        if (!(func->flags & js_strict_mode)) {
-
-            js_arguments2(
-                    env, stk_ptr->value, js_null, NULL);
-        }
-
-        // normally the js_return macro resets the flagged
-        // function object values on the stack, but it may
-        // not get a chance to, due to throw; so we do it.
-        stk_ptr->value = js_undefined;
-    }
-
-    // jump to the execution point where the 'try' was
-    // set up via setjmp ().  see also wmain () or
-    // try_statement () in statement_writer.js
-    longjmp(try->jmp_buf, 1);
-}
-
-// ------------------------------------------------------------
-//
-// js_throw_if_notfunc
-//
-// ------------------------------------------------------------
-
-static void js_throw_if_notfunc (
-                        js_environ *env, js_val func_val) {
-
-    if (js_is_object(func_val) &&
-            js_obj_is_exotic(js_get_pointer(func_val),
-                             js_obj_is_function))
-        return;
-
-    js_callthrow("TypeError_expected_function");
-}
-
-// ------------------------------------------------------------
-//
-// js_throw_if_notobj
-//
-// ------------------------------------------------------------
-
-static void js_throw_if_notobj (js_environ *env, js_val obj_val) {
-
-    if (js_is_object(obj_val))
-        return;
-
-    js_callthrow("TypeError_expected_object");
-}
-
-// ------------------------------------------------------------
-//
-// js_throw_if_nullobj
-//
-// ------------------------------------------------------------
-
-static void js_throw_if_nullobj (js_environ *env, js_val obj_val) {
-
-    if (js_is_undefined_or_null(obj_val))
-        js_callthrow("TypeError_convert_null_to_object");
-}
-
-// ------------------------------------------------------------
-//
-// js_throw_if_not_extensible
-//
-// strict mode does not permit properties to be set on
-// non-extensible objects, throw a TypeError in such a case
-//
-// ------------------------------------------------------------
-
-static void js_throw_if_not_extensible (js_environ *env, js_val obj) {
-
-    // error in strict mode if obj is a primitive value
-    if (js_is_object(obj)) {
-
-        js_obj *obj_ptr = js_get_pointer(obj);
-        if (obj_ptr->max_values & js_obj_not_extensible) {
-
-            js_throw_if_strict_0(
-                "TypeError_object_not_extensible");
-        }
-    }
-}
-
-// ------------------------------------------------------------
-//
-// js_throw_if_strict
-//
-// ------------------------------------------------------------
-
-static void js_throw_if_strict (
-        js_environ *env, const char *func_name, js_val arg) {
-
-    // check if the function object at the most recent
-    // stack frame is a strict function, and if that is
-    // the case, call a shadow function to throw an error.
-
-    js_link *stk_ptr = js_walkstack(js_stk_top);
-
-    const js_func *func =
-            (js_func *)js_get_pointer(stk_ptr->value);
-    if (func->flags & js_strict_mode) {
-
-        js_callshadow(env, func_name, arg);
-    }
 }

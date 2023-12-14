@@ -52,3 +52,20 @@ test (function () {
 console.log(
     (function ( [p1, p2, ...p5], {p3, p4}, ...r) {})
         .length);
+
+// ------------
+//
+// arrow functions have no prototype
+//
+// ------------
+
+test (function () {
+
+    let arr_fun = () => {
+        console.log(Object.getOwnPropertyDescriptors(arr_fun));
+        console.log(arr_fun);
+    };
+    arr_fun();
+    console.log(Object.getOwnPropertyDescriptors(arr_fun));
+    console.log(new arr_fun());
+})

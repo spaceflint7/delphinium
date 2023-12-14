@@ -17,6 +17,7 @@ GCC = $(GCCDIR)gcc -municode -mconsole -std=c99 -O0 -I. -Iruntime \
 RUNTIME = $(OBJDIR)/runtime.a
 RUNTIME1 = $(OBJDIR)/runtime1.o
 RUNTIME2 = $(OBJDIR)/runtime2.o
+RUNTIME3 = $(OBJDIR)/runtime3.o
 
 #
 # compile javacript to EXE via a C compiler
@@ -39,8 +40,10 @@ tests: $(RUNTIME) FORCE
 	@$(MAKE) -s test/suite/array.test
 	@$(MAKE) -s test/suite/bigint.test
 	@$(MAKE) -s test/suite/conditionals.test
+	@$(MAKE) -s test/suite/coroutines.test
 	@$(MAKE) -s test/suite/declarations.test
 	@$(MAKE) -s test/suite/destructuring.test
+	@$(MAKE) -s test/suite/exceptions.test
 	@$(MAKE) -s test/suite/new_constructors.test
 	@$(MAKE) -s test/suite/numeric_loops.test
 	@$(MAKE) -s test/suite/object_expression.test
@@ -81,8 +84,11 @@ $(RUNTIME2): $(RUNTIME_DEPS_JS) $(RUNTIME1)
 	node index.js $(OBJDIR)/runtime2.js >> $(OBJDIR)/runtime2.c
 	$(GCC) $(RUNTIME2) -c $(OBJDIR)/runtime2.c
 
-$(RUNTIME): $(RUNTIME1) $(RUNTIME2)
-	$(GCCDIR)ar rcs $(RUNTIME) $(RUNTIME1) $(RUNTIME2)
+$(RUNTIME3): $(RUNTIME1)
+	$(GCC) $(RUNTIME3) -c runtime/platform.c
+
+$(RUNTIME): $(RUNTIME1) $(RUNTIME2) $(RUNTIME3)
+	$(GCCDIR)ar rcs $(RUNTIME) $(RUNTIME1) $(RUNTIME2) $(RUNTIME3)
 
 runtime/js/%.js: FORCE
 	@

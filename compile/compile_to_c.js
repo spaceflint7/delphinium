@@ -28,8 +28,11 @@ function translate_whole_file (top_level_stmt) {
 
     literals_collection.write_initialization(output);
 
-    for (var func of functions)
+    for (var func of functions) {
+        if (func.generator || func.async)
+            function_writer.convert_to_coroutine(func);
         function_writer.write_function(func, output);
+    }
 
     function_writer.write_module_entry_point(
         functions.find(func => !func.parent_func), output);

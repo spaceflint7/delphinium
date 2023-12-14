@@ -9,12 +9,15 @@
 
 // the js_hasinstance () function from func.c
 const js_hasinstance = _shadow.js_hasinstance;
+// the js_coroutine () function from coroutine.c
+const js_coroutine = _shadow.js_coroutine;
 
 //
 // Function constructor
 //
 
 function Function (text) {
+    // incomplete implementation, see also ECMA 20.2.1.1
     _shadow.TypeError_unsupported_operation();
 }
 
@@ -148,6 +151,132 @@ _shadow.js_arguments = function (input_array) {
 
     return arguments_object;
 }
+
+//
+// CoroutineFunction ()
+//
+
+_shadow.CoroutineFunction = function CoroutineFunction (kind) {
+
+    // this function is called by js_newcoroutine ()
+    // in coroutine.c, as result of code injected by
+    // convert_to_coroutine () in function_writer.js.
+
+    if (kind === 2)
+        kind = Generator;
+    else
+        _shadow.TypeError_unsupported_operation();
+
+    const wrapped = this;
+    const wrapper_proto = new kind;
+    const wrapper = function () {
+
+        const ctx = js_coroutine(
+                        0x49 /* I */, wrapped, this);
+        const gen = { __proto__: wrapper_proto };
+        js_private_object(gen, kind.context_symbol, ctx);
+        return gen;
+    }
+
+    // copy 'length' and 'name' from the function being wrapped
+    defineProperty(wrapper, 'length', { value: wrapped.length });
+    defineProperty(wrapper, 'name', { value: wrapped.name });
+    defineProperty(wrapper, 'prototype', { value: wrapper_proto });
+    js_getOrSetPrototype(wrapper, kind.wrapper_prototype);
+
+    return wrapper;
+}
+
+//
+// GeneratorFunction
+//
+
+function GeneratorFunction (unused) {
+    // incomplete implementation, see also ECMA 20.2.1.1
+    _shadow.TypeError_unsupported_operation();
+}
+
+js_getOrSetPrototype(GeneratorFunction, Function);
+
+var GeneratorFunction_prototype = {
+    __proto__: Function.prototype };
+defineConfig(GeneratorFunction_prototype, 'prototype',
+                Generator.prototype);
+defineConfig(GeneratorFunction_prototype, 'constructor',
+                GeneratorFunction);
+defineConfig(GeneratorFunction_prototype, Symbol.toStringTag,
+                'GeneratorFunction');
+
+defineProperty(GeneratorFunction, 'prototype',
+                {   value: GeneratorFunction_prototype,
+                    writable: false });
+
+_shadow.GeneratorFunction = GeneratorFunction;
+
+//
+// Generator
+//
+
+function Generator () { }
+
+const generator_context_symbol = Symbol('generator_context_symbol');
+Generator.context_symbol = generator_context_symbol;
+Generator.wrapper_prototype = GeneratorFunction_prototype;
+
+const Generator_prototype = Generator.prototype;
+
+js_getOrSetPrototype(Generator_prototype, _shadow.this_iterator);
+
+defineProperty(Generator_prototype, 'constructor',
+                { value: GeneratorFunction_prototype, writable: false });
+
+defineNotEnum(Generator_prototype, 'next',   Generator_next);
+defineNotEnum(Generator_prototype, 'return', Generator_return);
+defineNotEnum(Generator_prototype, 'throw',  Generator_throw);
+
+defineConfig(Generator_prototype, Symbol.toStringTag,
+                'Generator');
+
+_shadow.Generator = Generator;
+
+//
+// Generator_next
+//
+
+function Generator_next (next_val) {
+
+    const ctx = js_private_object(
+                    this, generator_context_symbol);
+    return js_coroutine(0x4E /* N */, ctx, next_val);
+}
+
+Object.defineProperty(Generator_next, 'name', { value: 'next' });
+
+//
+// Generator_return
+//
+
+function Generator_return (return_val) {
+
+    const ctx = js_private_object(
+                    this, generator_context_symbol);
+    return js_coroutine(0x52 /* R */, ctx, return_val);
+}
+
+Object.defineProperty(Generator_return, 'name', { value: 'return' });
+
+//
+// Generator_throw
+//
+
+function Generator_throw (throw_val) {
+
+    const ctx = js_private_object(
+                    this, generator_context_symbol);
+    return js_coroutine(0x54 /* T */, ctx, throw_val);
+}
+
+Object.defineProperty(Generator_throw, 'name', { value: 'throw' });
 
 // ------------------------------------------------------------
 

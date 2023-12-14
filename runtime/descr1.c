@@ -173,12 +173,12 @@ static js_val js_getOwnProperty_2 (
     js_obj *obj = js_newexobj(env->obj_proto, env->descr_shape);
     js_val *values = obj->values;
 
-    values[env->descr_value]  = value;
-    values[env->descr_write]  = writable;
-    values[env->descr_getter] = getter;
-    values[env->descr_setter] = setter;
-    values[env->descr_enum]   = enumerable;
-    values[env->descr_config] = configurable;
+    values[0] = value;
+    values[1] = writable;
+    values[2] = getter;
+    values[3] = setter;
+    values[4] = enumerable;
+    values[5] = configurable;
 
     return js_make_object(obj);
 }
@@ -333,14 +333,5 @@ static void js_descr_init (js_environ *env) {
     js_newprop(env, obj, env->str_set)          = js_make_number(0.0);
     js_newprop(env, obj, env->str_enumerable)   = js_make_number(0.0);
     js_newprop(env, obj, env->str_configurable) = js_make_number(0.0);
-
-    js_obj *obj_ptr = ((js_obj *)js_get_pointer(obj));
-    js_shape *shape = env->descr_shape = obj_ptr->shape;
-
-    env->descr_value  = js_shape_index(env, shape, env->str_value);
-    env->descr_write  = js_shape_index(env, shape, env->str_writable);
-    env->descr_getter = js_shape_index(env, shape, env->str_get);
-    env->descr_setter = js_shape_index(env, shape, env->str_set);
-    env->descr_enum   = js_shape_index(env, shape, env->str_enumerable);
-    env->descr_config = js_shape_index(env, shape, env->str_configurable);
+    env->descr_shape = ((js_obj *)js_get_pointer(obj))->shape;
 }

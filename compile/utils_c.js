@@ -163,3 +163,12 @@ exports.get_with_local2 = function (expr, prop) {
 
     return prop + ',' + var2;
 }
+
+// ------------------------------------------------------------
+
+exports.text_callback = function (node, callback) {
+
+    if (!node.text_callbacks)
+        node.text_callbacks = [];
+    node.text_callbacks.push(callback);
+}

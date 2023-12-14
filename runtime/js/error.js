@@ -302,6 +302,11 @@ _shadow.TypeError_mix_types_in_arithmetic = function throw_TypeError () {
     throw TypeError('Cannot mix incompatible types in arithmetic');
 }
 
+_shadow.TypeError_coroutine_already_resumed = function throw_TypeError () {
+
+    throw TypeError('Coroutine is already running');
+}
+
 _shadow.TypeError_unsupported_operation = function throw_TypeError () {
 
     throw TypeError('Operation not supported');
