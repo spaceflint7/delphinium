@@ -490,6 +490,8 @@ function toString () {
     return '[object ' + tag + ']';
 }
 
+_shadow.object_toString = toString;
+
 // ------------------------------------------------------------
 //
 // Object_getSpecialTag
@@ -517,6 +519,8 @@ function check_obj_arg (obj) {
         _shadow.TypeError_convert_null_to_object();
     return Object(obj);
 }
+
+_shadow.check_obj_arg = check_obj_arg;
 
 // ------------------------------------------------------------
 

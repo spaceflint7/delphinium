@@ -290,7 +290,11 @@ function variable_declaration_simple_decl (stmt, decl, output) {
         // but we might still need to initialize it.
 
         text = '';
-        if (stmt.kind !== 'var') {
+        if (stmt.kind === 'var') {
+            if (!decl.init)
+                return;
+        } else {
+
             if (stmt.kind === 'const') {
                 if (!stmt.inhibit_const) {
                     // see variable_declaration_pattern ()
@@ -308,13 +312,19 @@ function variable_declaration_simple_decl (stmt, decl, output) {
                 // must now be replaced with js_undefined.
                 // see also write_var_locals ()
                 text = '*';
+
+            } else if (stmt.parent_node.type === 'SwitchCase') {
+                // special case for a 'let' (but not 'var')
+                // in a case block, see switch_statement ()
+                const switch_stmt = stmt.parent_node.parent_node;
+                switch_stmt.init_text.push(
+                    'js_val ' + c_name + '=js_undefined;');
+                text = '';
             }
 
             if (!decl.init)
                 decl.init = utils_c.init_expr_undefined;
-
-        } else if (!decl.init)
-            return;
+        }
 
         text += c_name;
     }
@@ -654,7 +664,7 @@ function for_statement (stmt, output) {
             + `?(${deref}${c_name}=${iter}[2],true):false`;
 
         stmt.update = `(void)${c_name},`
-                    + `js_nextiter(env,${iter},js_undefined)`;
+                    + `js_nextiter1(env,${iter})`;
 
         return node;
     }
@@ -771,7 +781,7 @@ function return_statement (stmt, output) {
 
             throw_ret_var = 'tmp_' + utils.get_unique_id();
             utils_c.insert_init_text(func_node.body,
-                        'js_val ' + throw_ret_var +
+                        'volatile js_val ' + throw_ret_var +
                         '=js_uninitialized;//tmp_ret_var');
             func_node.throw_ret_var = throw_ret_var;
         }
@@ -898,6 +908,20 @@ function switch_statement (stmt, output) {
     // series of 'if' conditions
     output.push('do{//switch');
 
+    // a local variable may be declared and assigned
+    // in a case block and then referenced in a later
+    // case block:  switch (x) { case 1: let y = 5;
+    //                           case 2: print y; }
+    // if jumping directly to case 2, then 'y' is in
+    // scope, but uninitialized.  to fix this, we have
+    // to hoist declarations of non-var locals to the
+    // top of the 'switch' statement, and explicitly
+    // initialize them to 'undefined'.  this is done
+    // mostly by variable_declaration_simple_decl (),
+    // and some code at the bottom of this function.
+    let insert_index = output.length;
+    stmt.init_text = [];
+
     // use a temp var if the switch discriminant
     // is not a trivial expression
     let lhs = write_expression(stmt.discriminant, false);
@@ -939,6 +963,11 @@ function switch_statement (stmt, output) {
     }
 
     output.push('}while(0);//endswitch');
+
+    // complete the hoisting of non-var locals to
+    // the top of the 'switch' statement, see above.
+    for (const decl of stmt.init_text)
+        output.splice(insert_index++, 0, decl);
 }
 
 // ------------------------------------------------------------

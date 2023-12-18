@@ -277,7 +277,7 @@ function assignment_expression (expr) {
             for (let elem_ix = 0; elem_ix < elements.length; elem_ix++) {
                 let elem = elements[elem_ix];
                 if (elem_ix > 0)
-                    text += `,js_nextiter(env,${iter},js_undefined)`;
+                    text += `,js_nextiter1(env,${iter})`;
                 if (elem === null) // skip element
                     continue;
                 let elem_val = `${iter}[2]`;

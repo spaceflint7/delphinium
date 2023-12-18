@@ -427,13 +427,11 @@ function update_expression_calc (lhs_var, rhs, opr, cmd) {
                   && typeof(rhs.value) !== 'number');
 
     //
-    // calc_var = isnumber(calc_var = lhs_var + rhs_var)
-    //          ? calc_var : js_binop(...)
+    // calc_var = is_number (lhs_var | rhs_var)
+    //          ? lhs_var (op) rhs_var
+    //          : js_binop(...)
     //
-    // note (1) our non-numeric values are all NaN-boxed,
-    // and (2) NaN propagation throughout calculations.
-    // this means we can check just the result for NaN,
-    // to know if we need to go to js_binary_op () or not.
+    // see also comment for macro js_are_both_numbers ()
     //
 
     const calc_var = utils_c.alloc_temp_value(rhs);
@@ -483,10 +481,10 @@ function update_expression_calc (lhs_var, rhs, opr, cmd) {
 
     } else { // arithmetic
 
-        text += `js_is_number(${calc_var}=js_make_number(`
+        text += `js_are_both_numbers(${lhs_var},${rhs_var})`
+             + `?js_make_number(`
              +  `js_get_number(${lhs_var})${opr}`
-             +  `js_get_number(${rhs_var})))`
-             +  `?${calc_var}:`;
+             +  `js_get_number(${rhs_var})):`;
     }
 
     text += binop_call(opr, lhs_var, rhs_var) + ')';

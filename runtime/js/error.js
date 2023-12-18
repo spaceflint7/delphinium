@@ -288,6 +288,11 @@ _shadow.TypeError_not_iterable = function throw_TypeError () {
     throw TypeError('Type mismatch, expected iterable object');
 }
 
+_shadow.TypeError_iterator_cannot_call = function throw_TypeError (funcName) {
+
+    throw TypeError('Iterator method missing or invalid: ' + funcName);
+}
+
 _shadow.TypeError_incompatible_object = function throw_TypeError (expectedType) {
 
     if (expectedType)

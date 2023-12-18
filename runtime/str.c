@@ -655,11 +655,14 @@ static js_val js_str_print (js_c_func_args) {
             const objset_id *id = js_get_pointer(arg_val);
             txt_ptr = id->data;
             txt_len = id->len >> 1;
-        }
 
         // while the primary purpose is to print strings,
         // it also serves as a general debug-print utility
-        else js_print(env, arg_val);
+        } else {
+            printf("<dbg>");
+            js_print(env, arg_val);
+            js_return(js_undefined);
+        }
     }
 
     printf("%*.*ls", txt_len, txt_len, txt_ptr);

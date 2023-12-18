@@ -44,6 +44,7 @@ tests: $(RUNTIME) FORCE
 	@$(MAKE) -s test/suite/declarations.test
 	@$(MAKE) -s test/suite/destructuring.test
 	@$(MAKE) -s test/suite/exceptions.test
+	@$(MAKE) -s test/suite/math.test
 	@$(MAKE) -s test/suite/new_constructors.test
 	@$(MAKE) -s test/suite/numeric_loops.test
 	@$(MAKE) -s test/suite/object_expression.test

@@ -5,7 +5,7 @@
 //
 // ------------------------------------------------------------
 
-;(function BigInt_init () {
+;(function Math_init () {
 
 const Math = {};
 
@@ -26,8 +26,14 @@ defineNotEnum(_global,  'Math', Math);
 //
 // ------------------------------------------------------------
 
-defineConfig(Math, 'abs', function abs (x) {
-    return (x === 0) ? 0 : ((x > 0) ? x : -x) });
+defineNotEnum(Math, 'abs', _shadow.math.abs);
+defineNotEnum(Math, 'acos', _shadow.math.acos);
+defineNotEnum(Math, 'acosh', _shadow.math.acosh);
+defineNotEnum(Math, 'asin', _shadow.math.asin);
+defineNotEnum(Math, 'asinh', _shadow.math.asinh);
+defineNotEnum(Math, 'atan', _shadow.math.atan);
+defineNotEnum(Math, 'atanh', _shadow.math.atanh);
+defineNotEnum(Math, 'atan2', _shadow.math.atan2);
 
 // ------------------------------------------------------------
 //

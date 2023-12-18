@@ -182,7 +182,7 @@ void js_newiter (js_environ *env, js_val *new_iter,
                              js_obj_is_function)) {
 
             new_iter[0] = method;
-            js_nextiter(env, new_iter, js_undefined);
+            js_nextiter1(env, new_iter);
             return;
         }
     }
@@ -194,19 +194,12 @@ void js_newiter (js_environ *env, js_val *new_iter,
 
 // ------------------------------------------------------------
 //
-// js_nextiter
-//
-// steps an iterator prepared by js_newiter (), see above.
-// the caller should check that iter[0] is non-zero,
-// before assuming that iter[2] holds the next value.
+// js_checkiter
 //
 // ------------------------------------------------------------
 
-void js_nextiter (js_environ *env, js_val *iter, js_val arg) {
-
-    js_val result = js_callfunc1(
-                        env, /* next () func */ iter[0],
-                        /* this */ iter[1], arg);
+static void js_checkiter (js_environ *env, js_val *iter,
+                          js_val result) {
 
     if (!js_is_object(result))
         js_callthrow("TypeError_iterator_result");
@@ -236,4 +229,122 @@ void js_nextiter (js_environ *env, js_val *iter, js_val arg) {
     iter[2] = value;
     if (js_is_truthy(done))
         iter[0].raw = 0; // terminate iteration
+}
+
+// ------------------------------------------------------------
+//
+// js_nextiter1
+//
+// steps an iterator prepared by js_newiter (), see above.
+// the caller should check that iter[0] is non-zero,
+// before assuming that iter[2] holds the next value.
+//
+// ------------------------------------------------------------
+
+void js_nextiter1 (js_environ *env, js_val *iter) {
+
+    js_val result = js_callfunc1(
+                        env, /* next () func */ iter[0],
+                        /* this */ iter[1], js_undefined);
+
+    js_checkiter(env, iter, result);
+}
+
+// ------------------------------------------------------------
+//
+// js_throw_if_notfunc_iter
+//
+// ------------------------------------------------------------
+
+static void js_throw_if_notfunc_iter (
+                js_environ *env, js_val func, js_val name) {
+
+    if (js_is_object(func) &&
+            js_obj_is_exotic(js_get_pointer(func),
+                             js_obj_is_function))
+        return;
+
+    js_callshadow(
+            env, "TypeError_iterator_cannot_call", name);
+}
+
+// ------------------------------------------------------------
+//
+// js_nextiter2
+//
+// steps an iterator with support for return () and
+// throw (), as required by coroutine yield* mechanism.
+//
+// for cmd = 0, calls 'next (arg)' on the iterator, like
+// js_nextiter1 (), except this passes an extra argument.
+//
+// for cmd > 1, calls 'return (arg)' on the iterator,
+// and returns its result; returns false if a function
+// named return () is not found on the iterator.
+//
+// for cmd < 1, calls 'throw (arg)' on the iterator, and
+// returns its result; if no such function, then it may
+// call 'return (arg) on the iterator, if such a function
+// exists, and then throw a TypeError exception.
+//
+// ------------------------------------------------------------
+
+bool js_nextiter2 (js_environ *env, js_val *iter,
+                   int cmd, js_val arg) {
+
+    int64_t dummy_shape_cache;
+    js_val func;
+
+    if (cmd < 0) {
+        //
+        // request to call throw () on the iterator
+        //
+        func = js_getprop(env, iter[1],
+                                env->str_throw,
+                                &dummy_shape_cache);
+        if (js_is_undefined_or_null(func)) {
+            // we don't have a throw function (), so
+            // check if we have a return () function
+            js_val func2 = js_getprop(env, iter[1],
+                                env->str_return,
+                                &dummy_shape_cache);
+            if (!js_is_undefined_or_null(func2)) {
+                js_throw_if_notfunc_iter(
+                        env, func2, env->str_return);
+                // call return () without an argument
+                js_callfunc1(env, func2,
+                  /* this */ iter[1], js_undefined);
+            }
+        }
+        // throw a TypeError if throw () is missing,
+        // otherwise the logic below calls throw ()
+        js_throw_if_notfunc_iter(
+                        env, func, env->str_throw);
+
+    } else if (cmd > 0) {
+        //
+        // request to call return () on the iterator
+        //
+        func = js_getprop(env, iter[1],
+                                env->str_return,
+                                &dummy_shape_cache);
+        if (js_is_undefined_or_null(func)) {
+            // tell caller that return () is missing
+            return false;
+        }
+        js_throw_if_notfunc_iter(
+                        env, func, env->str_return);
+
+    } else {
+        //
+        // request to call next () on the iterator
+        //
+        func = iter[0];
+    }
+
+    js_val result = js_callfunc1(env, func,
+                      /* this */ iter[1], arg);
+
+    js_checkiter(env, iter, result);
+    return true;
 }

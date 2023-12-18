@@ -47,8 +47,8 @@ function log1 (arg) {
         return js_str_print(_shadow.Symbol_toString.call(arg));
     }
 
-    // we reach here for a null value (type object),
-    // or if type is one of undefined, string, or bigint
+    // we reach here for a null (object) value,
+    // or for undefined, number, string, or bigint
     let suffix = (typeof(arg) === 'bigint') ? 'n' : '';
     return js_str_print(arg + suffix);
 }

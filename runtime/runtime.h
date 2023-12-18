@@ -89,9 +89,12 @@ typedef union js_val { double num; uint64_t raw; } js_val;
 // special value to mark uninitialized state, used internally
 #define js_uninitialized        ((js_val){ .raw = js_dynamic_type_mask | 0x1141 })
 
-// check if both operands are numbers
+// check if both operands are numbers.  note the use of
+// a bitwise operator (|) and not an arithmetic operator
+// (like +), because compiler optimizations or unknown
+// hardware might modify NaN bits during arithmetic.
 #define js_are_both_numbers(v1,v2) \
-    likely(0 != js_is_number(js_make_number(js_get_number(v1)+js_get_number(v2))))
+    (~(v1.raw | v2.raw) & js_dynamic_type_mask)
 
 //
 // check if value is a specific type of primitive
@@ -266,7 +269,10 @@ void js_spreadargs (js_environ *env, js_val iterable);
 void js_newiter (js_environ *env, js_val *new_iter,
                  int kind, js_val iterable_expr);
 
-void js_nextiter (js_environ *env, js_val *iter, js_val arg);
+void js_nextiter1 (js_environ *env, js_val *iter);
+
+bool js_nextiter2 (js_environ *env, js_val *iter,
+                   int cmd, js_val arg);
 
 //
 // function

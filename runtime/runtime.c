@@ -48,7 +48,7 @@
 #define js_obj_get_proto(obj_ptr) \
     ((js_obj *)((uintptr_t)(obj_ptr)->proto & ~7))
 
-// current source file and line number
+// create an anonymous function with no closures
 #define js_unnamed_func(c_func,num_args)            \
     js_newfunc(env, (c_func), env->str_empty, NULL, \
                js_strict_mode | (num_args), /* closures */ 0)
@@ -181,6 +181,7 @@ struct js_environ {
 #include "mix.c"
 #include "except.c"
 #include "iter.c"
+#include "math.c"
 #include "init.c"
 #include "debug.c"
 

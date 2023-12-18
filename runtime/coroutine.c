@@ -15,6 +15,7 @@ typedef struct js_coroutine_context {
     js_val value2;
     int state;
 #define js_coroutine_is_resumed 0x40000000U
+#define js_coroutine_yield_star 0x20000000U
 
     int stack_size;
     js_link *stack_head;
@@ -110,7 +111,6 @@ js_val js_yield (js_environ *env, js_val val) {
         js_throw(env, val);
     return val;
 }
-
 // ------------------------------------------------------------
 //
 // js_yield_star
@@ -123,8 +123,42 @@ js_val js_yield_star (js_environ *env, js_val iterable_val) {
     js_newiter(env, iter, 'O', iterable_val);
 
     while (likely(iter[0].raw != 0)) {
-        const js_val arg = js_yield(env, iter[2]);
-        js_nextiter(env, iter, arg);
+
+        // save environment of coroutine
+        js_link *stk_top    = env->stack_top;
+        int      stk_size   = env->stack_size;
+        js_try  *try_hndlr  = env->try_handler;
+
+        // resume execution in the caller's context
+        int state = js_coroutine_yield_star;
+        js_coroutine_switch2(NULL, &state, &iter[2]);
+        state &= ~js_coroutine_is_resumed;
+
+        // restore environment of coroutine
+        env->stack_top      = stk_top;
+        env->stack_size     = stk_size;
+        env->try_handler    = try_hndlr;
+
+        // convert value 1 -- indicating throw (),
+        // as sent by coroutine_resume () -- into
+        // value -1, as expected by js_nextiter2 ().
+        // convert value 2 -- indicating return (),
+        // into value 1.  and zero remains zero.
+        int cmd = ((state & 2) >> 1) - (state & 1);
+        if (!js_nextiter2(env, iter, cmd, iter[2])) {
+
+            // false is returned in the specific case
+            // that 'return' was requested but a func
+            // named 'return ()' is not found on the
+            // iterator.  in this case, the yield*
+            // is treated as if a 'return' statement
+            // was executed at this point.  we yield
+            // state > 0, which coroutine_resume ()
+            // handles by terminating this coroutine.
+            state = 1;
+            js_coroutine_switch2(
+                            NULL, &state, &iter[2]);
+        }
     }
 
     return iter[2];
@@ -249,14 +283,21 @@ static js_val js_coroutine_resume (
 
     // command is 'R' for Return
     if (cmd.num == /* 0x52 */ (double)'R') {
-        // set an override return value, and throw
-        // a special value (js_uninitialized) which
-        // is ignored by exception handling logic.
-        // see also js_coroutine_init3 () and
-        // return_statement () in statement_writer.js
-        ctx->value2 = val;
-        val = js_uninitialized;
-        should_throw = 1;
+        if (!(ctx->state & js_coroutine_yield_star)) {
+            // set an override return value, and throw
+            // a special value (js_uninitialized) which
+            // is ignored by exception handling logic.
+            // see also js_coroutine_init3 () and
+            // return_statement () in statement_writer.js
+            ctx->value2 = val;
+            val = js_uninitialized;
+        } else {
+            // the coroutine is currently processing
+            // an iterator in js_yield_star ().  we pass
+            // the actual value sent to return (), which
+            // should be forwarded to the other iterator
+        }
+        should_throw = 2;
 
     // command is 'T' for Throw
     } else if (cmd.num == /* 0x54 */ (double)'T') {
@@ -294,6 +335,7 @@ static js_val js_coroutine_resume (
     // resume execution in the target context
     int state = should_throw | js_coroutine_is_resumed;
     js_coroutine_switch2(ctx, &state, &val);
+    state &= ~js_coroutine_yield_star;
 
     // restore environment of caller
     env->stack_top      = stk_top;

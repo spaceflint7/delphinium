@@ -193,12 +193,26 @@ function add_local_if_first_in_scope (node) {
     if (!name)
         missing_identifier_error(node);
 
-    const other_node = node.scope.get(name);
+    const other_node = node.scope.get(name)
+                    ?? find_parameter_node(node, name);
     if (other_node && !other_node.is_catch_variable)
         duplicate_identifier_error(node, other_node);
 
     node.unique_id = utils.get_unique_id();
     node.scope.set(name, node);
+
+    // at the function level, 'let' and 'const' locals
+    // may not override parameter names
+    function find_parameter_node (node, name) {
+        if (node.is_arguments_object || node.is_meta_property)
+            return;
+        const block_node = node.parent_node.parent_node;
+        if (block_node.type === 'BlockStatement') {
+            const func_node = block_node.parent_node;
+            if (func_node.is_func_node)
+                return func_node.scope.get(name);
+        }
+    }
 }
 
 // ------------------------------------------------------------
@@ -242,8 +256,17 @@ function add_local_if_declared_var (node) {
             // declaration to override the self reference to
             // the function itself, added in process_function ()
             if (!(is_func_node && check_node === other_node)) {
+                // allow a 'var' declaration to specify the
+                // name of a function parameter, effectively
+                // changing the declaration to an assignment
+                if (other_node.is_parameter) {
+                    node.unique_id = other_node.unique_id;
+                    node.is_parameter = true;
+                    return;
+                }
                 // also allow a 'var' declaration to override
-                // any function declaration in the same scope
+                // any function declaration in the same scope,
+                // and also to override any parameter
                 if (other_node.type !== 'FunctionDeclaration')
                     duplicate_identifier_error(node, other_node);
 

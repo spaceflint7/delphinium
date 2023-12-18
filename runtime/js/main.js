@@ -34,6 +34,12 @@ function overrideFunctionName (func_obj, new_name) {
     return defineProperty(func_obj, 'name', { value: new_name });
 }
 
+// ------------------------------------------------------------
+//
+// internal functions exported by our C runtime
+//
+// ------------------------------------------------------------
+
 const js_keys_in_object = _shadow.js_keys_in_object;
 const js_property_flags = _shadow.js_property_flags;
 const js_num_util = _shadow.js_num_util;

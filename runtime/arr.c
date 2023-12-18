@@ -87,7 +87,7 @@ js_val js_restarr_iter (js_environ *env, js_val *iterator) {
     uint32_t prop_idx = 0;
     while (iterator[0].raw) {
         js_arr_set (env, arr_val, ++prop_idx, iterator[2]);
-        js_nextiter(env, iterator, js_undefined);
+        js_nextiter1(env, iterator);
     }
     return arr_val;
 }

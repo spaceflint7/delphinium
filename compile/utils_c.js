@@ -34,7 +34,8 @@ exports.get_variable_c_name = function (node) {
 
     if (node.unique_id && node.id?.name) {
         const clean_name = exports.clean_name(node.id);
-        node.c_name = `local_${clean_name}_${node.unique_id}`;
+        const prefix = node.is_parameter ? 'arg' : 'local';
+        node.c_name = `${prefix}_${clean_name}_${node.unique_id}`;
         return node.c_name;
     }
 

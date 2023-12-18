@@ -8,6 +8,7 @@
 ;(function Array_init () {
 
 const Object = _global.Object;
+const check_obj_arg = _shadow.check_obj_arg;
 
 //
 // Array constructor
@@ -68,7 +69,50 @@ defineNotEnum(Array_prototype, 'push', function push (...elements) {
     this.length = len;
 });
 
+//
+// join
+//
+
+defineNotEnum(Array_prototype, 'join', function join (sep) {
+
+    const arr = check_obj_arg(this);
+    let len = +this.length;
+    if (!(len >= 0)) // if NaN or negative number
+        len = 0;
+
+    sep = (sep === undefined) ? ',' : ('' + sep);
+    let sep1 = '';
+
+    let str = '';
+    let idx = 0;
+    while (idx < len) {
+        str += sep1;
+        sep1 = sep;
+        const e = arr[idx++];
+        str += (e === undefined || e === null)
+            ? '' : ('' + e);
+    }
+    return str;
+});
+
+//
+// keys
+//
+
 defineNotEnum(Array_prototype, 'keys', function keys () {});
+
+//
+// toString
+//
+
+defineNotEnum(Array_prototype, 'toString', function toString () {
+
+    const arr = check_obj_arg(this);
+    let func = arr['join'];
+    if (typeof(func) !== 'function')
+        func = _shadow.object_toString;
+    return func.call(arr);
+});
 
 defineNotEnum(Array_prototype, Symbol.iterator, iterator);
 

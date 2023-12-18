@@ -120,7 +120,7 @@ static js_val js_tonumber (js_environ *env, js_val val) {
     }
 
     if (!len)
-        return js_nan;
+        return js_make_number(0.0);
 
     // copy js string into null-terminated ascii buffer
     char *str = env->num_string_buffer;
@@ -426,6 +426,10 @@ static js_val js_num_util (js_c_func_args) {
 
     if (!js_is_number(input))
         js_callthrow("TypeError_expected_number");
+
+    // turn negative zero into positive zero
+    if (input.num == 0)
+        input.num = 0;
 
     if (!js_is_undefined(extra)) {
         if (!js_is_number(extra))
