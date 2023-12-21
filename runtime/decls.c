@@ -113,7 +113,9 @@ static void js_throw_if_notobj (js_environ *env, js_val obj_val);
 
 static void js_throw_if_nullobj (js_environ *env, js_val obj_val);
 
-static void js_throw_if_not_extensible (js_environ *env, js_val obj);
+static bool js_throw_if_not_extensible (
+                js_environ *env, js_val obj, js_val prop,
+                bool always_throw_or_only_if_strict_mode);
 
 static void js_throw_if_strict (
                 js_environ *env, const char *func_name, js_val arg);

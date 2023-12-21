@@ -127,7 +127,7 @@ static js_val js_getOrSetPrototype (js_c_func_args) {
 
 // ------------------------------------------------------------
 //
-// js_obj_extensions
+// js_preventExtensions
 //
 // ------------------------------------------------------------
 
@@ -145,6 +145,12 @@ static js_val js_preventExtensions (js_c_func_args) {
                     (js_obj *)js_get_pointer(obj_val);
 
             obj_ptr->max_values |= js_obj_not_extensible;
+
+            if (js_obj_is_exotic(
+                            obj_ptr, js_obj_is_array)) {
+                // disable fast-path on this array
+                ((js_arr *)obj_ptr)->length = -1U;
+            }
         }
     }
 
@@ -233,6 +239,8 @@ static js_val js_keys_in_object (js_c_func_args) {
 
 static void js_obj_init_2 (js_environ *env) {
 
+    js_val name;
+
     // global self reference.  note that this reference is
     // stored without the flag bit that env->global_obj has.
     // thus js_getprop () and js_setprop_object () can detect
@@ -267,14 +275,16 @@ static void js_obj_init_2 (js_environ *env) {
             js_unnamed_func(js_getOrSetPrototype, 1);
 
     // shadow.preventExtensions function
-    js_newprop(env, shadow,
-        js_str_c(env, "js_preventExtensions")) =
-            js_unnamed_func(js_preventExtensions, 1);
+    name = js_str_c(env, "preventExtensions");
+    js_newprop(env, shadow, name) =
+        js_newfunc(env, js_preventExtensions, name, NULL,
+                   js_strict_mode | 1, /* closures */ 0);
 
     // shadow.isExtensible function
-    js_newprop(env, shadow,
-        js_str_c(env, "js_isExtensible")) =
-            js_unnamed_func(js_isExtensible, 1);
+    name = js_str_c(env, "isExtensible");
+    js_newprop(env, shadow, name) =
+        js_newfunc(env, js_isExtensible, name, NULL,
+                   js_strict_mode | 1, /* closures */ 0);
 
     // shadow.js_keys_in_object
     js_newprop(env, shadow,

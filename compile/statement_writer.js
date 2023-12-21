@@ -94,8 +94,20 @@ function block_statement (stmt, output) {
         }
     }
 
-    while (stmt.init_text.length)
-        output.splice(temp_index, 0, stmt.init_text.shift());
+    // insert 'init_text' lines at the top of the
+    // block.  note that lines are insert in reverse
+    // order, and that lines that start with '!' are
+    // inserted after all lines that did not start
+    // with '!', so that all pure declarations can
+    // come before any logic, see select_init_node ()
+    while (stmt.init_text.length) {
+        let init_text = stmt.init_text.shift();
+        if (init_text[0] === '!') {
+            output.splice(temp_index + 1, 0,
+                          init_text.substring(1));
+        } else
+            output.splice(temp_index, 0, init_text);
+    }
 
     process_temp_list(stmt.temp_vals, 'js_val ', '');
     process_temp_list(stmt.temp_stks, 'js_link ', '*');
@@ -300,7 +312,11 @@ function variable_declaration_simple_decl (stmt, decl, output) {
                     // see variable_declaration_pattern ()
                     text += 'const ';
                 }
-            } else if (stmt.kind !== 'let')
+            } else if (stmt.kind === 'let') {
+                // variable marked by volatile_scanner ()
+                if (decl.is_volatile_var)
+                    text += 'volatile ';
+            } else
                 throw [ stmt, 'error in declaration' ];
             text += 'js_val ';
 
@@ -635,7 +651,7 @@ function for_statement (stmt, output) {
         //
         const iter = 'iter_' + utils.get_unique_id();
         utils_c.insert_init_text(stmt,
-            `js_val ${iter}[3];js_newiter(env,${iter},`
+            `!js_val ${iter}[3];js_newiter(env,${iter},`
             + `'${stmt.save_type[3]}',`
             + write_expression(stmt.right) + ');');
 

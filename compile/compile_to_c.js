@@ -17,6 +17,7 @@ function translate_whole_file (top_level_stmt) {
     (require('./variable_resolver.js'))(functions);
 
     const literals_collection = new (require('./literals.js'));
+    const volatile_scanner = require('./volatile_scanner.js');
     const function_writer = require('./function_writer.js');
 
     output.push(`#include "runtime.h"`);
@@ -29,6 +30,8 @@ function translate_whole_file (top_level_stmt) {
     literals_collection.write_initialization(output);
 
     for (var func of functions) {
+        if (func.has_try_block)
+            volatile_scanner(func);
         if (func.generator || func.async)
             function_writer.convert_to_coroutine(func);
         function_writer.write_function(func, output);

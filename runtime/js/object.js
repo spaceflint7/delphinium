@@ -335,16 +335,30 @@ defineNotEnum(Object, 'is', function is (v1, v2) {
 //
 // ------------------------------------------------------------
 
-defineNotEnum(Object, 'preventExtensions',          null);
-defineNotEnum(Object, 'seal',                       null);
+function seal_or_freeze (obj, clear_write, clear_config) {
 
-// ------------------------------------------------------------
-//
-// Object.freeze
-//
-// ------------------------------------------------------------
+    if (!(js_property_flags(obj) & 1))
+        return obj;
+    _shadow.preventExtensions(obj);
+    getOwnPropertyNamesAndSymbols(obj, key => {
+        const descr = js_getOwnProperty(obj, key);
+        let redef = false;
+        if (clear_write && descr.writable) {
+            descr.writable = false;
+            redef = true;
+        }
+        if (clear_config && descr.configurable) {
+            descr.configurable = false;
+            redef = true;
+        }
+        if (redef)
+            defineProperty(obj, key, descr);
+    });
+}
 
-defineNotEnum(Object, 'freeze',                     null);
+defineNotEnum(Object, 'preventExtensions', _shadow.preventExtensions);
+defineNotEnum(Object, 'seal',   obj => seal_or_freeze(obj, false, true));
+defineNotEnum(Object, 'freeze', obj => seal_or_freeze(obj, true,  true));
 
 // ------------------------------------------------------------
 //
@@ -364,9 +378,24 @@ defineNotEnum(Object, 'setPrototypeOf',             null);
 //
 // ------------------------------------------------------------
 
-defineNotEnum(Object, 'isExtensible',               null);
-defineNotEnum(Object, 'isFrozen',                   null);
-defineNotEnum(Object, 'isSealed',                   null);
+function is_sealed_or_frozen (obj, check_write, check_config) {
+
+    let result = !_shadow.isExtensible(obj);
+    if (result) {
+        getOwnPropertyNamesAndSymbols(obj, key => {
+            const descr = js_getOwnProperty(obj, key);
+            if (check_write && descr.writable)
+                result = false;
+            if (check_config && descr.configurable)
+                result = false;
+        });
+    }
+    return result;
+}
+
+defineNotEnum(Object, 'isExtensible', _shadow.isExtensible);
+defineNotEnum(Object, 'isFrozen', obj => is_sealed_or_frozen(obj, true, true));
+defineNotEnum(Object, 'isSealed', obj => is_sealed_or_frozen(obj, false, true));
 
 // ------------------------------------------------------------
 //
@@ -406,13 +435,57 @@ function getOwnPropertyNamesAndSymbols (obj, callback) {
 
     let keys = js_keys_in_object(obj);
     const keys_length = keys.length;
+    // number keys
+    let idx_arr, idx_num = 0;
+    for (let i = 0; i < keys_length; i++) {
+        const key_as_str = keys[i];
+        const flg = js_property_flags(obj, key_as_str);
+        if ((flg & 0x001D) === 0x0019) {
+            // object is valid (0x0001),
+            // property is set in object (0x0010),
+            // property is integer index (0x0008),
+            // property not a symbol (0x0004)
+            const key_as_num = +key_as_str;
+            if (!idx_arr) {
+                if (key_as_num === idx_num) {
+                    // as long as keys are enumerated
+                    // in the proper order, we can
+                    // just forward them to callback
+                    idx_num++;
+                    callback(key_as_str, flg);
+                    continue;
+                }
+                idx_arr = [];
+                idx_num = 0;
+            }
+            // hold the keys in a temp array
+            idx_arr[idx_num++] = +key_as_num;
+            idx_arr[idx_num++] = key_as_str;
+            idx_arr[idx_num++] = flg;
+        }
+    }
+    // numeric keys held in the temp array
+    if (idx_arr) {
+        while (idx_num) {
+            let i = 0;
+            for (let j = 3; j < idx_num; j += 3) {
+                if (idx_arr[j] < idx_arr[i])
+                    i = j;
+            }
+            callback(idx_arr[i + 1], idx_arr[i + 2]);
+            idx_arr[i + 2] = idx_arr[--idx_num];
+            idx_arr[i + 1] = idx_arr[--idx_num];
+            idx_arr[i]     = idx_arr[--idx_num];
+        }
+    }
     // string keys
     for (let i = 0; i < keys_length; i++) {
         const key = keys[i];
         const flg = js_property_flags(obj, key);
-        if ((flg & 0x0015) === 0x0011) {
+        if ((flg & 0x001D) === 0x0011) {
             // object is valid (0x0001),
             // property is set in object (0x0010),
+            // property not integer index (0x0008),
             // property not a symbol (0x0004)
             callback(key, flg);
         }

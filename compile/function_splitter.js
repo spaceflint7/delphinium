@@ -63,6 +63,9 @@ function process_stmt_or_expr (
             node.strict_mode = parent_func_stmt.strict_mode;
         }
 
+        if (node.type === 'TryStatement')
+            parent_func_stmt.has_try_block = true;
+
         for (const sub_node of utils.get_child_nodes(node)) {
 
             sub_node.parent_node = node;

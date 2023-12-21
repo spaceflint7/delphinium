@@ -165,14 +165,28 @@ function write_param_locals (func_stmt) {
 
             if (!process_pattern(node, c_name, c_names, output))
                 throw [ node, 'unknown parameter node ' + node.type ];
-        }
+
+        } else if (node.is_volatile_var)
+            c_names.push('!' + c_names.pop());
+
     }
 
     if (c_names.length) {
         output.unshift(`js_link *${stk_ptr}=stk_args->next;`);
-        output.unshift('js_val ' + c_names.join(',') + ';');
-        // dummy stmts to prevent warnings about unused vars
-        c_names.forEach(name => output.push(`(void)${name};`));
+        for (let name of c_names) {
+            let prefix, suffix;
+            if (name[0] === '!') {
+                // volatile prefix, see also volatile_scanner ()
+                name = name.substring(1);
+                prefix = 'volatile ';
+                suffix = ';';
+            } else {
+                // dummy stmts to prevent warnings about unused vars
+                prefix = '';
+                suffix = `;(void)${name};`;
+            }
+            output.unshift(`${prefix}js_val ${name}${suffix}`);
+        }
     }
 
     return output;
@@ -201,8 +215,11 @@ function write_param_locals (func_stmt) {
                 return false; // unknown node type
 
             const clean_name = utils_c.clean_name(node2);
-            all_c_names.push(node2.c_name =
-                `arg_${clean_name}_${node2.unique_id}`);
+            let name_to_push = node2.c_name =
+                `arg_${clean_name}_${node2.unique_id}`;
+            if (node2.is_volatile_var)
+                name_to_push = '!' + name_to_push;
+            all_c_names.push(name_to_push);
             // force identifier_expression ()
             // to use the c_name in this node
             node2.is_property_name = true;

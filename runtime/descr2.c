@@ -85,8 +85,6 @@ static js_val js_defineProperty (js_c_func_args) {
 
     } else {
 
-        js_throw_if_not_extensible(env, obj_val);
-
         success = (js_obj_is_exotic(obj_ptr, js_obj_is_array)
             ? js_defineProperty_array
             : js_defineProperty_object)(
@@ -112,6 +110,16 @@ static bool js_defineProperty_object (
     int *ptr_shape_id =
                 &((js_obj *)js_get_pointer(obj_val))->shape_id;
     int old_shape_id = *ptr_shape_id;
+
+    // if object is not extensible, and property is not
+    // already found on the object, then throw an error
+    js_obj *obj_ptr = (js_obj *)js_get_pointer(obj_val);
+    if (obj_ptr->max_values & js_obj_not_extensible) {
+        if (!js_ownprop(env, obj_val, prop_val, false)) {
+            js_throw_if_not_extensible(
+                        env, obj_val, prop_val, true);
+        }
+    }
 
     js_val *old_ptr = js_ownprop(env, obj_val, prop_val, true);
     js_val old_val = *old_ptr;
@@ -194,6 +202,11 @@ static bool js_defineProperty_array (
         return false; // can't redefine property
 
     if (new_val.raw != old_val.raw) {
+
+        // if object is not extensible, and index is not
+        // already set in the array, then throw an error
+        js_throw_if_not_extensible(
+                        env, obj_val, prop_val, true);
 
         // this will grow the array if necessary
         js_arr_set(env, obj_val, prop_idx, new_val);
@@ -401,6 +414,8 @@ static void js_defineProperty_parse (
 
         if (js_is_truthy(tmp))
             flags |= js_descr_enum;
+        else
+            flags &= ~js_descr_enum;
     }
 
     // check configurable
@@ -413,6 +428,8 @@ static void js_defineProperty_parse (
 
         if (js_is_truthy(tmp))
             flags |= js_descr_config;
+        else
+            flags &= ~js_descr_config;
     }
 
     js_setdescr(out_descr, flags, val1, val2);

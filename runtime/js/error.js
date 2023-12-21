@@ -207,12 +207,13 @@ _shadow.TypeError_get_property_of_null_object = function throw_TypeError (prop) 
 _shadow.TypeError_set_property_of_null_object = function throw_TypeError (prop) {
 
     prop = prop ? (': ' + prop) : '';
-    throw TypeError('Cannot set property of undefined or null');
+    throw TypeError('Cannot set property of undefined or null' + prop);
 }
 
-_shadow.TypeError_object_not_extensible = function throw_TypeError () {
+_shadow.TypeError_object_not_extensible = function throw_TypeError (prop) {
 
-    throw TypeError('Cannot add property to non-extensible object');
+    prop = prop ? (': ' + prop) : '';
+    throw TypeError('Cannot add property to non-extensible object' + prop);
 }
 
 _shadow.TypeError_expected_symbol = function throw_TypeError () {

@@ -171,7 +171,9 @@ static void js_throw_if_nullobj (js_environ *env, js_val obj_val) {
 //
 // ------------------------------------------------------------
 
-static void js_throw_if_not_extensible (js_environ *env, js_val obj) {
+static bool js_throw_if_not_extensible (
+                js_environ *env, js_val obj, js_val prop,
+                bool always_throw_or_only_if_strict_mode) {
 
     // error in strict mode if obj is a primitive value
     if (js_is_object(obj)) {
@@ -179,10 +181,24 @@ static void js_throw_if_not_extensible (js_environ *env, js_val obj) {
         js_obj *obj_ptr = js_get_pointer(obj);
         if (obj_ptr->max_values & js_obj_not_extensible) {
 
-            js_throw_if_strict_0(
-                "TypeError_object_not_extensible");
+            if (always_throw_or_only_if_strict_mode) {
+
+                js_callshadow(env,
+                        "TypeError_object_not_extensible",
+                        prop);
+
+            } else {
+
+                js_throw_if_strict(env,
+                        "TypeError_object_not_extensible",
+                        prop);
+            }
+
+            return true;    // if not strict mode
         }
     }
+
+    return false;
 }
 
 // ------------------------------------------------------------

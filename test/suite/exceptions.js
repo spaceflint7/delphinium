@@ -43,3 +43,29 @@
     console.log(typeof(e));
 
 })()
+
+//
+// test correct application of 'volatile' modifier
+// on local variables that are modified within a 'try'
+//
+
+;(function () {
+
+    ;(function (a, {b}, [c], ...d) {
+        a = 'Before';
+        b = 'Before';
+        c = 'Before';
+        d = 'Before';
+    let e = 'Before';
+        try {
+            a = 'After';
+            b = 'After';
+            c = 'After';
+            d = 'After';
+            e = 'After';
+            throw null;
+        } catch (e) { }
+        finally { console.log(a, b, c, d, e); }
+    })(null, {}, [], null)
+
+})()

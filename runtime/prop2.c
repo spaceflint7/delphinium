@@ -258,7 +258,16 @@ static void js_setprop_object (js_environ *env,
     }
 
     js_throw_if_primitive(env, obj);
-    js_throw_if_not_extensible(env, obj);
+    if (js_throw_if_not_extensible(env, obj, prop, false))
+        return; // not strict mode, just silently ignore
+
+    // if object is not extensible, and property is not
+    // already found on the object, then throw an error
+    if (obj_ptr->max_values & js_obj_not_extensible) {
+        js_throw_if_strict_1(
+            "TypeError_object_not_extensible", prop);
+        return; // silently ignore if not strict mode
+    }
 
     // switch object to a shape which includes the new property
     const int old_count = old_shape->num_values;
@@ -348,7 +357,8 @@ static void js_setprop_array (js_environ *env, js_val obj,
     }
 
     js_throw_if_primitive(env, obj);
-    js_throw_if_not_extensible(env, obj);
+    if (js_throw_if_not_extensible(env, obj, prop, false))
+        return; // not strict mode, just silently ignore
 
     js_arr_set(env, obj, prop_idx, value);
 }

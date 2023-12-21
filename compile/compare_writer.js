@@ -44,7 +44,8 @@ function compare_equality (expr) {
             if (!text) {
 
                 // strict equality
-                text = strict_equality(expr, left, right);
+                text = strict_equality(expr, left, right,
+                                    operand_flags(expr));
             }
         }
     }
@@ -126,6 +127,33 @@ function compare_equality (expr) {
     }
 
     //
+    // prepare operand flags
+    //
+
+    function operand_flags (expr) {
+
+        let any_string_operand,
+            non_number_operand;
+
+        let type = is_literal(expr.left);
+        if (type && type !== 'number') {
+            non_number_operand = true;
+            any_string_operand = (type === 'string')
+                            || is_typeof(expr.left);
+        } else {
+            type = is_literal(expr.right);
+            if (type && type !== 'number') {
+                non_number_operand = true;
+                any_string_operand = (type === 'string')
+                            || is_typeof(expr.right);
+            }
+        }
+
+        return { any_string_operand,
+                 non_number_operand };
+    }
+
+    //
     // strict equality
     //
     // before actually calling the runtime, we can still
@@ -133,7 +161,7 @@ function compare_equality (expr) {
     // reference instead of calling js_equals ()
     //
 
-    function strict_equality (expr, left, right) {
+    function strict_equality (expr, left, right, flags) {
 
         let text = '(';
 
@@ -154,8 +182,11 @@ function compare_equality (expr) {
 
             // if both operand are same, we still have to
             // do the comparison, in case the value is NaN
-            text += `js_is_number(${left})`
-                 +      `?(${left}.num==${right}.num):true)`;
+            if (!flags.non_number_operand) {
+                text += `js_is_number(${left})`
+                     +  `?(${left}.num==${right}.num):`;
+            }
+            text += 'true)';
 
         } else {
 
@@ -175,11 +206,21 @@ function compare_equality (expr) {
             // order to keep this test simple for the common case.
             //
 
-            text += `js_are_both_numbers(${left},${right})`
-                 +  `?(${left}.num==${right}.num)`
-                 +  `:(unlikely(((${left}.raw|${right}.raw)&(js_primitive_bit|2))==0)`
-                 +  `?(${left}.raw==${right}.raw)`
-                 +  `:js_strict_eq(env,${left},${right})))`;
+            if (!flags.non_number_operand) {
+                // if either operand is known to be not a number,
+                // then skip checking that both are numbers
+                text += `js_are_both_numbers(${left},${right})`
+                     +  `?(${left}.num==${right}.num):`;
+            }
+            if (!flags.any_string_operand) {
+                // if either operand is known to be a string,
+                // then skip checking that either is a primitive
+                text += `(unlikely(((${left}.raw|${right}.raw)&(js_primitive_bit|2))==0)`
+                     +  `?(${left}.raw==${right}.raw):`;
+            }
+            text += `js_strict_eq(env,${left},${right}))`;
+            if (!flags.any_string_operand)
+                text += ')';
         }
 
         return text;
