@@ -9,8 +9,6 @@
 
 const js_sym_util = _shadow.js_sym_util;
 
-const Object = _global.Object;
-
 //
 // Symbol constructor
 //
@@ -42,107 +40,94 @@ defineProperty(_global, 'Symbol', { configurable: true,
 
 _shadow.Symbol = Symbol; // keep a copy
 
+// ------------------------------------------------------------
+//
+// Symbol registry:
 //
 // Symbol.for ()
+// Symbol.keyFor ()
 //
+// ------------------------------------------------------------
 
-function _for (key) {
-    // XXX manage using a set
-    return js_sym_util(key); // shared symbol
+let sym_reg_map; // Map () is not available yet
+
+function sym_reg_for (key) {
+    if (!sym_reg_map)
+        sym_reg_map = new Map();
+    key = '' + key;
+    let sym = sym_reg_map.get(key);
+    if (typeof(sym) !== 'symbol') {
+        sym = js_sym_util(key); // new symbol
+        sym_reg_map.set(key, sym);
+        sym_reg_map.set(sym, key);
+    }
+    return sym;
 }
 
-Object.defineProperty(_for, 'name', { value: 'for' });
+const sym_reg_key = (sym) => sym_reg_map?.get(sym);
 
-Object.defineProperty(Symbol, 'for', { configurable: true,
-    value: _for, writable: true, /* not enumerable */ });
+overrideFunctionName(sym_reg_for, 'for');
+overrideFunctionName(sym_reg_key, 'keyFor');
 
-//
-// keyFor ()
-//
-
-function keyFor (sym) {
-    /// xxx if description is symbol, throw error
-    // if description is not string, convert to string
-    const text_and_type = js_sym_util(sym);
-    // XXX only if shared
-    return text_and_type;
-}
-
-Object.defineProperty(Symbol, 'keyFor', { configurable: true,
-    value: keyFor, writable: true, /* not enumerable */ });
+defineNotEnum(Symbol, 'for', sym_reg_for);
+defineNotEnum(Symbol, 'keyFor', sym_reg_key);
 
 //
 // Well-known symbols
 //
 
-Object.defineProperty(Symbol, 'asyncIterator', {
-    value: Symbol('Symbol.asyncIterator') });
+const define_well_known_symbol = (x) =>
+    defineProperty(Symbol, x,
+            { value: Symbol('Symbol.' + x) });
 
-Object.defineProperty(Symbol, 'hasInstance', {
-    value: Symbol('Symbol.hasInstance') });
-
-Object.defineProperty(Symbol, 'isConcatSpreadable', {
-    value: Symbol('Symbol.isConcatSpreadable') });
-
-Object.defineProperty(Symbol, 'iterator', {
-    value: Symbol('Symbol.iterator') });
-
-Object.defineProperty(Symbol, 'match', {
-    value: Symbol('Symbol.match') });
-
-Object.defineProperty(Symbol, 'matchAll', {
-    value: Symbol('Symbol.matchAll') });
-
-Object.defineProperty(Symbol, 'replace', {
-    value: Symbol('Symbol.replace') });
-
-Object.defineProperty(Symbol, 'search', {
-    value: Symbol('Symbol.search') });
-
-Object.defineProperty(Symbol, 'toPrimitive', {
-    value: Symbol('Symbol.toPrimitive') });
-
-Object.defineProperty(Symbol, 'toStringTag', {
-    value: Symbol('Symbol.toStringTag') });
-
-Object.defineProperty(Symbol, 'unscopables', {
-    value: Symbol('Symbol.unscopables') });
+define_well_known_symbol('asyncIterator');
+define_well_known_symbol('hasInstance');
+define_well_known_symbol('isConcatSpreadable');
+define_well_known_symbol('iterator');
+define_well_known_symbol('match');
+define_well_known_symbol('matchAll');
+define_well_known_symbol('replace');
+define_well_known_symbol('search');
+define_well_known_symbol('species');
+define_well_known_symbol('split');
+define_well_known_symbol('toPrimitive');
+define_well_known_symbol('toStringTag');
+define_well_known_symbol('unscopables');
 
 //
 // Symbol.prototype
 //
 
-Object.defineProperty(Symbol_prototype, 'constructor', {
-    value: Symbol, writable: true, configurable: true });
-
-Object.defineProperty(Symbol_prototype, 'toString', {
-    value: Symbol_toString, writable: true, configurable: true });
-
-Object.defineProperty(Symbol_prototype, 'valueOf', {
-    value: Symbol, writable: true, configurable: true });
-
-Object.defineProperty(Symbol_prototype, 'description', {
-    get() { return js_sym_util(undefined, this); },
-    configurable: true });
-
+defineNotEnum(Symbol_prototype, 'constructor', Symbol);
+defineNotEnum(Symbol_prototype, 'toString', toString);
+defineNotEnum(Symbol_prototype, 'valueOf', valueOf);
+defineProperty(Symbol_prototype, 'description',
+                { get: get_descr, configurable: true });
 defineConfig(Symbol_prototype, Symbol.toStringTag, 'Symbol');
-
-Object.defineProperty(Symbol_prototype, Symbol.toPrimitive, {
-    value: null, configurable: true });
+defineConfig(Symbol_prototype, Symbol.toPrimitive, toPrimitive);
 
 //
-// Symbol.prototype.toString
+// Symbol.prototype functions
 //
 
-function Symbol_toString () {
-    if (typeof(this) !== 'symbol')
-        TypeError_incompatible_object('symbol');
-    return 'Symbol(' + js_sym_util(this) + ')';
+function ensure_symbol (val) {
+    if (typeof(val) !== 'symbol')
+        _shadow.TypeError_incompatible_object('symbol');
+    return val;
 }
 
-overrideFunctionName(Symbol_toString, 'toString');
+function toString () {
+    return 'Symbol(' + js_sym_util(ensure_symbol(this)) + ')';
+}
 
-_shadow.Symbol_toString = Symbol_toString;
+_shadow.Symbol_toString = toString;
+
+function get_descr () { return js_sym_util(ensure_symbol(this)); }
+overrideFunctionName(get_descr, 'get description');
+
+function valueOf () { return ensure_symbol(this); }
+function toPrimitive () { return ensure_symbol(this); }
+overrideFunctionName(toPrimitive, 'Symbol.toPrimitive');
 
 // ------------------------------------------------------------
 

@@ -27,15 +27,21 @@ struct objset_id {
 // create object set
 objset *objset_create (void);
 
-// adds the specified id to the objset.  if the specified
-// id was not added yet, the objset_id itself (i.e. not a
-// copy) is added to the objset, and returned.  if the id
-// is already in the objset, as determined by comparison
-// by value, rather than pointer address comparison, then
-// the previously-added objset_id is returned.
-// returns NULL an error.
+// free object set
+#define objset_destroy(objset) free(objset)
+
+// adds the specified id to the objset.  (1) but if the
+// specified id is already found in the objset, returns
+// the previously-added objset_id structure.  if the
+// copy parameter is non-NULL, it is set to false.
+// if the specified id is not found in the objset, then
+// (2) if the copy parameter is NULL, then the passed
+// objset_id is inserted into the objset and returned,
+// or (3) if the copy parameter is non-NULL, then the
+// objset_id structure is duplicated using malloc and
+// memcpy, and copy is set to true.
 objset_id *objset_intern (objset **ptr_to_objset,
-                          objset_id *id);
+                          objset_id *id, bool *copy);
 
 // search for an existing objset id, without adding it.
 objset_id *objset_search (const objset *objset,

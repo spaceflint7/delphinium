@@ -72,8 +72,8 @@ test/%.js: $(RUNTIME) FORCE
 # build runtime in objdir
 #
 
-RUNTIME_DEPS_C = $(wildcard runtime/*.c)
-RUNTIME_DEPS_H = $(wildcard runtime/*.h)
+RUNTIME_DEPS_C = $(wildcard runtime/*.c) $(wildcard runtime/include/*.c)
+RUNTIME_DEPS_H = $(wildcard runtime/*.h) $(wildcard runtime/include/*.h)
 RUNTIME_DEPS_JS = $(wildcard runtime/js/*.js)
 
 $(RUNTIME1): $(RUNTIME_DEPS_C) $(RUNTIME_DEPS_H)

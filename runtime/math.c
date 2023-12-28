@@ -70,6 +70,25 @@ static js_val js_math_atan2 (js_c_func_args) {
 
 // ------------------------------------------------------------
 //
+// js_math_clz32
+//
+// ------------------------------------------------------------
+
+static js_val js_math_clz32 (js_c_func_args) {
+
+    uint32_t x = 0;
+    js_link *arg_ptr = stk_args->next;
+    if (arg_ptr != js_stk_top) {
+        const js_val x_val = arg_ptr->value;
+        if (js_is_number(x_val))
+            x = (uint32_t)x_val.num;
+    }
+    x = (!x) ? 32 : __builtin_clz(x);
+    js_return(js_make_number((double)x));
+}
+
+// ------------------------------------------------------------
+//
 // js_math_init
 //
 // ------------------------------------------------------------
@@ -96,6 +115,7 @@ static void js_math_init (js_environ *env) {
     js_math_func_decl(atan);
     js_math_func_decl(atanh);
     js_math_func_decl(atan2);
+    js_math_func_decl(clz32);
 }
 
 // ------------------------------------------------------------

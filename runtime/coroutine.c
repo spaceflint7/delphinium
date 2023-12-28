@@ -360,7 +360,6 @@ static js_val js_coroutine_resume (
                 env->shape_value_done, val, done);
 }
 
-
 // ------------------------------------------------------------
 //
 // js_coroutine
@@ -372,15 +371,16 @@ static js_val js_coroutine (js_c_func_args) {
     js_val cmd  = js_undefined;
     js_val arg1 = js_undefined;
     js_val arg2 = js_undefined;
-    js_val ret  = js_uninitialized;
+    js_val ret  = js_undefined;
 
     js_link *arg_ptr = stk_args;
     if ((arg_ptr = arg_ptr->next) != js_stk_top) {
         cmd = arg_ptr->value;
-        if ((arg_ptr = arg_ptr->next) != js_stk_top)
+        if ((arg_ptr = arg_ptr->next) != js_stk_top) {
             arg1 = arg_ptr->value;
-        if ((arg_ptr = arg_ptr->next) != js_stk_top)
-            arg2 = arg_ptr->value;
+            if ((arg_ptr = arg_ptr->next) != js_stk_top)
+                arg2 = arg_ptr->value;
+        }
     }
 
     // command is 'I' for Initialize
@@ -408,8 +408,6 @@ static js_val js_coroutine (js_c_func_args) {
         }
     }
 
-    if (ret.raw == js_uninitialized.raw)
-        js_callthrow("TypeError_unsupported_operation");
     js_return(ret);
 }
 

@@ -49,8 +49,13 @@ static uint64_t js_shape_key (js_environ *env, js_val prop) {
 
             int prim_type = js_get_primitive_type(prop);
 
-            if (prim_type == js_prim_is_string)
+            if (prim_type == js_prim_is_string) {
+
+                objset_id *id = js_get_pointer(prop);
+                if (js_str_is_interned(id))
+                    return (uint64_t)id;
                 break; // skip toString()
+            }
 
             if (prim_type == js_prim_is_symbol)
                 return (uint64_t)js_get_pointer(prop);
@@ -65,7 +70,11 @@ static uint64_t js_shape_key (js_environ *env, js_val prop) {
 
     } while (false);
 
-    return (uint64_t)js_str_intern(env, js_get_pointer(prop));
+    // intern the string
+
+    objset_id *id = js_get_pointer(prop);
+    js_str_intern(&env->strings_set, id);
+    return (uint64_t)id;
 }
 
 // ------------------------------------------------------------

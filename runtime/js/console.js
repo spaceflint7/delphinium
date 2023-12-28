@@ -172,12 +172,19 @@ function log2obj (arg) {
             if (tag === 'Arguments')
                 tag = '[' + tag + ']';
         }
-        if (tag)
-            tag += ' ';
     }
 
-    js_str_print(tag + '{');
-    log3(arg, ' ', ' ');
+    let open_str = ' ';
+    const ismap = (proto === _shadow.Map.prototype);
+    if (ismap || proto === _shadow.Set.prototype)
+        open_str = log3_map(arg, tag, ismap);
+    else {
+        if (tag)
+            tag += ' ';
+        js_str_print(tag + '{');
+    }
+
+    log3(arg, open_str, ' ');
     js_str_print('}');
 
     //
@@ -198,11 +205,11 @@ function log2obj (arg) {
     function get_constructor_name (proto, arg) {
 
         if (proto === null)
-            return '[Object: null prototype] ';
+            return '[Object: null prototype]';
 
         if (    arg === _shadow.Generator.prototype
             ||proto === _shadow.Generator.prototype)
-            return 'Object [Generator] ';
+            return 'Object [Generator]';
 
         if ((js_property_flags(proto, 'constructor') & 0x10)
         &&  (js_property_flags(proto.constructor, 'name') & 0x10)) {
@@ -214,8 +221,6 @@ function log2obj (arg) {
                     name = 'Function [' + tag + ']';
             } else if (name === 'Object')
                 name = '';
-            if (name)
-                name += ' ';
             return name;
         }
     }
@@ -330,6 +335,32 @@ function log3_keys (arg) {
     }
 
     return keys;
+}
+
+//
+// log3_map
+//
+
+function log3_map (arg, tag, print_value) {
+
+    const size = arg.size;
+    js_str_print(tag + '(' + size + ') {');
+
+    let sep = ' ';
+    arg.forEach((value, key) => {
+        js_str_print(sep);
+        log1quoted(key);
+        if (print_value) {
+            js_str_print(' => ');
+            log1quoted(value);
+        }
+        sep = ', ';
+    });
+
+    if (size > 0)
+        js_str_print(' ');
+
+    return sep;
 }
 
 //

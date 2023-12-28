@@ -70,4 +70,5 @@ defineNotEnum(_global, 'globalThis', _global);
 #include "number.js"
 #include "boolean.js"
 #include "bigint.js"
+#include "mapset.js"
 #include "error.js"

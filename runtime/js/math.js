@@ -34,6 +34,7 @@ defineNotEnum(Math, 'asinh', _shadow.math.asinh);
 defineNotEnum(Math, 'atan', _shadow.math.atan);
 defineNotEnum(Math, 'atanh', _shadow.math.atanh);
 defineNotEnum(Math, 'atan2', _shadow.math.atan2);
+defineNotEnum(Math, 'clz32', _shadow.math.clz32);
 
 // ------------------------------------------------------------
 //

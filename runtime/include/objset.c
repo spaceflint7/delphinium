@@ -198,7 +198,7 @@ __forceinline uint32_t objset_hash (const void *data, int len) {
 //
 
 objset_id *objset_intern (objset **ptr_to_objset,
-                          objset_id *id_ptr) {
+                          objset_id *id_ptr, bool *copy) {
 
     objset *map = *ptr_to_objset;
     const uint32_t id_hash =
@@ -214,6 +214,19 @@ objset_id *objset_intern (objset **ptr_to_objset,
                 get_entry(map, index + header_size_in_entries);
 
         if (!entry->next_index) {
+            // if requested, make a copy of the key
+            if (copy) {
+                const uint32_t copy_len =
+                        sizeof(objset_id) + id_ptr->len;
+                objset_id *id_copy = malloc(copy_len);
+                if (!id_copy) {
+                    *copy = false;
+                    return NULL;
+                }
+                memcpy(id_copy, id_ptr, copy_len);
+                id_ptr = id_copy;
+                *copy = true;
+            }
             // we reached an entry that was never populated,
             // so there is no need to search any further
             if (del_index) {
@@ -236,13 +249,16 @@ objset_id *objset_intern (objset **ptr_to_objset,
                 entry->next_index = ~0;
 
             } else {
-                // resize into a new objset, then add the new
-                // entry.  this recursive call should neither
-                // fail, nor keep recursing, because the
-                // resized map should now have enough space
+                // resize into a new objset, then
+                // get the index for the new entry
                 objset *new_map = objset_resize(map);
-                if (!new_map)
+                if (!new_map) {
+                    if (copy) {
+                        *copy = false;
+                        free(id_ptr);
+                    }
                     return NULL;
+                }
                 *ptr_to_objset = new_map;
                 entry = objset_resize_entry(new_map, id_hash);
             }
@@ -259,6 +275,8 @@ objset_id *objset_intern (objset **ptr_to_objset,
                 &&  memcmp(id_ptr->data, entry->id_ptr->data,
                            id_ptr->len) == 0) {
 
+                    if (copy)
+                        *copy = false;
                     return entry->id_ptr;
                 }
             }

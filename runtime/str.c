@@ -55,7 +55,7 @@ js_val js_newstr (js_environ *env, bool intern,
 
     if (intern) {
         objset_id *id2 = js_check_alloc(objset_intern(
-                                    &env->strings_set, id));
+                            &env->strings_set, id, NULL));
         if (id2 == id) {
             // the input id has been interned and returned,
             // so we should flag the id as non-freeable
@@ -70,30 +70,18 @@ js_val js_newstr (js_environ *env, bool intern,
 
 // ------------------------------------------------------------
 //
+// js_str_is_interned
 // js_str_intern
 //
 // ------------------------------------------------------------
 
-static objset_id *js_str_intern (js_environ *env,
-                                 objset_id *id) {
+#define js_str_is_interned(id) \
+    ((id)->flags & js_str_in_objset)
 
-    if (id->flags & js_str_in_objset) {
-        // text is already in the object set, and thus is unique
-        return id;
-    }
-
-    objset_id *id2 = js_check_alloc(objset_intern(
-                                &env->strings_set, id));
-    if (id2 == id) {
-        // the input id has been interned and returned,
-        // so we should flag the id as such
-        id->flags |= js_str_in_objset;
-
-    } else // we received an id that was already interned
-        id = id2;
-
-    return id;
-}
+#define js_str_intern(set,id)                   \
+    id = js_check_alloc(                        \
+            objset_intern((set), (id), NULL));  \
+    id->flags |= js_str_in_objset;
 
 // ------------------------------------------------------------
 //
@@ -137,7 +125,7 @@ static js_val js_str_c (js_environ *env, const char *ascii_text) {
 
     objset_id *id = (objset_id *)js_get_pointer(new_str);
     objset_id *id2 = js_check_alloc(objset_intern(
-                                &env->strings_set, id));
+                        &env->strings_set, id, NULL));
     if (id2 == id) {
         // the input id has been interned and returned,
         // so we should flag the id as such
@@ -168,7 +156,7 @@ static objset_id *js_str_search_or_intern (js_environ *env,
         memcpy(id->data, data, wlen);
 
         objset_id *id2 = js_check_alloc(objset_intern(
-                                    &env->strings_set, id));
+                        &env->strings_set, id, NULL));
         if (id2 == id) {
             // the input id has been interned and returned,
             // so we should flag the id as such
@@ -686,7 +674,8 @@ static void js_str_init (js_environ *env) {
     empty->flags = js_str_is_string
                  | js_str_in_objset
                  | js_str_is_static;
-    empty = objset_intern(&env->strings_set, empty);
+    empty = objset_intern(
+                    &env->strings_set, empty, NULL);
     env->str_empty =
             js_make_primitive(empty, js_prim_is_string);
 

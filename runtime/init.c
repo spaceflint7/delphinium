@@ -35,6 +35,7 @@ static js_environ *js_init (int64_t version_code) {
     js_big_init(env);
     js_arr_init(env);
     js_math_init(env);
+    js_map_init(env);
 
     return env;
 }

@@ -8,6 +8,7 @@ function asinh (x) { console.log(Math.asinh(x).toFixed(8)); }
 function atan (x) { console.log(Math.atan(x).toFixed(8)); }
 function atanh (x) { console.log(Math.atanh(x).toFixed(8)); }
 function atan2 (y, x) { console.log(Math.atan2(y, x).toFixed(8)); }
+function clz32 (x) { console.log(Math.clz32(x)); }
 
 //console.log(Object.getOwnPropertyDescriptors(Math));
 console.log((-0).toString(8),
@@ -76,3 +77,7 @@ atanh(2); // NaN
 
 atan2(90, 15); // 1.4056476493802699
 atan2(15, 90); // 0.16514867741462683
+
+clz32(1); // 31
+clz32(1000); // 22
+clz32(); // 32

@@ -10,6 +10,6 @@ Although there is runtime support for some operations, the generated program is 
 
 There is a small test suite in folder `./test/suite` which can be run using the command `make tests`.  To clean the output `.obj` directory, use `make clean`.
 
-Some of the stuff that is already implemented:  JS primitives, objects, properties and accessors, arrays, functions, closures, exceptions, loops and conditions, operators, destructuring assignment, generators.
+Some of the stuff that is already implemented:  JS primitives, objects, properties and accessors, arrays, functions, closures, exceptions, loops and conditions, operators, destructuring assignment, generators, map and set.
 
-Much still left to do: garbage collection, proxy and reflect, classes, promise, async, map and set, regular expressions, import/export and modules, improve conditionals, improve optimizations, improve runtime support library.
+Much still left to do: garbage collection, proxy and reflect, classes, promise, async, regular expressions, import/export and modules, improve conditionals, improve optimizations, improve runtime support library.

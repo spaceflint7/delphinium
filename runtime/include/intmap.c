@@ -78,7 +78,7 @@ intmap *intmap_create (void) {
 }
 
 //
-// objset_resize_entry
+// intmap_resize_entry
 //
 
 static intmap_entry *intmap_resize_entry (
@@ -161,11 +161,12 @@ static intmap *intmap_resize (intmap *old_map) {
 }
 
 //
-// intmap_set
+// intmap_set_or_add
 //
 
-bool intmap_set (intmap **ptr_to_map,
-                 uint64_t key, uint64_t value) {
+bool intmap_set_or_add (intmap **ptr_to_map,
+                        uint64_t key, uint64_t value,
+                        bool *was_added) {
 
     intmap *map = *ptr_to_map;
     int index = key & (map->capacity - 1);
@@ -181,6 +182,8 @@ bool intmap_set (intmap **ptr_to_map,
         if (!entry->next_index) {
             // we reached an entry that was never populated,
             // so there is no need to search any further
+            if (was_added)
+                *was_added = true;
 
             if (del_index) {
                 // overwrite a deleted entry if one was found
@@ -201,11 +204,8 @@ bool intmap_set (intmap **ptr_to_map,
                 entry->next_index = ~0;
 
             } else {
-
-                // resize into a new map, then add the new entry.
-                // this second, recursive call should neither
-                // fail, nor keep recursing, because the resized
-                // map should always have enough space
+                // resize into a new objset, then
+                // get the index for the new entry
                 intmap *new_map = intmap_resize(map);
                 if (!new_map)
                     return false;
@@ -223,6 +223,8 @@ bool intmap_set (intmap **ptr_to_map,
                 // found a non-deleted entry with a matching key,
                 // so we can just overwrite the value
                 entry->value = value;
+                if (was_added)
+                    *was_added = false;
                 return true;
             }
         } else { // entry->next_index > 0
@@ -238,7 +240,7 @@ bool intmap_set (intmap **ptr_to_map,
 }
 
 //
-// intmap_get_or_set
+// intmap_get_or_add
 //
 
 bool intmap_get_or_add (intmap **ptr_to_map,

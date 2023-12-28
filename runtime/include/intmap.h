@@ -1,7 +1,7 @@
 
 // ------------------------------------------------------------
 //
-// int32-to-int64 map
+// int64-to-int64 map
 //
 // ------------------------------------------------------------
 
@@ -11,8 +11,8 @@
 
 typedef struct intmap intmap;
 
-// intmap_create - create an int32-to-int64 map.
-// keys are 32-bit integers (zero permitted),
+// intmap_create - create an int64-to-int64 map.
+// keys are 64-bit integers (zero permitted),
 // values are 64-bit integers (zero permitted).
 // returns the map, or NULL if cannot allocate.
 intmap *intmap_create (void);
@@ -27,7 +27,8 @@ intmap *intmap_create (void);
 // return value might be false if cannot allocate.
 // in all other cases, the return value is true.
 bool intmap_set_or_add (intmap **ptr_to_map,
-                        uint64_t key, uint64_t value);
+                        uint64_t key, uint64_t value,
+                        bool *was_added);
 
 // intmap_get_or_del - retrieve and optionally
 // delete an entry.  if the value parameter is
@@ -39,7 +40,7 @@ bool intmap_get_or_del (intmap *map,
                         uint64_t key, uint64_t *value,
                         bool del);
 
-#define intmap_set(ptr_to_map,key,value) intmap_set_or_add(ptr_to_map,key,value)
+#define intmap_set(ptr_to_map,key,value) intmap_set_or_add(ptr_to_map,key,value,NULL)
 
 // intmap_has - returns true or false for a key
 #define intmap_has(map,key) intmap_get_or_del(map,key,NULL,false)

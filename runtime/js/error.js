@@ -318,6 +318,11 @@ _shadow.TypeError_unsupported_operation = function throw_TypeError () {
     throw TypeError('Operation not supported');
 }
 
+_shadow.TypeError_constructor_requires_new = function throw_TypeError (name) {
+
+    throw TypeError('Constructor requires new: ' + name);
+}
+
 _shadow.ReferenceError_uninitialized_variable = function throw_ReferenceError () {
 
     throw ReferenceError('Cannot access uninitialized variable');

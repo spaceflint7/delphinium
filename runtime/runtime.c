@@ -182,6 +182,7 @@ struct js_environ {
 #include "except.c"
 #include "iter.c"
 #include "math.c"
+#include "map.c"
 #include "init.c"
 #include "debug.c"
 
