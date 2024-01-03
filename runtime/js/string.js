@@ -115,17 +115,17 @@ function valueOf () {
 //defineNotEnum(String_prototype, 'isWellFormed', ??
 //defineNotEnum(String_prototype, 'toWellFormed', ??
 
-defineNotEnum(String_prototype, Symbol.iterator, iterator);
+defineNotEnum(String_prototype, _Symbol.iterator, iterator);
 
 //
 // [Symbol.iterator] ()
 //
 
-const string_iterator_symbol = Symbol('string_iterator');
+const string_iterator_symbol = _Symbol('string_iterator');
 
 const iterator_prototype = { __proto__: _shadow.this_iterator };
 defineNotEnum(iterator_prototype, 'next', iterator_next);
-defineConfig(iterator_prototype, Symbol.toStringTag, 'String Iterator');
+defineConfig(iterator_prototype, _Symbol.toStringTag, 'String Iterator');
 
 function iterator () {
 
@@ -142,7 +142,7 @@ function iterator_next () {
     return private_state.next();
 }
 
-overrideFunctionName(iterator, _shadow.this_iterator[Symbol.iterator].name);
+overrideFunctionName(iterator, _shadow.this_iterator[_Symbol.iterator].name);
 overrideFunctionName(iterator_next, 'next');
 
 //

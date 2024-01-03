@@ -16,7 +16,7 @@ const js_map_util = _shadow.js_map_util;
 //
 // ------------------------------------------------------------
 
-const map_symbol = Symbol('map');
+const map_symbol = _Symbol('map');
 
 function Map (iterable) {
 
@@ -40,7 +40,7 @@ _shadow.Map = Map; // keep a copy
 // note, not same function object as Set[Symbol.species]
 const Map_species = (function () { return this });
 overrideFunctionName(Map_species, 'get [Symbol.species]');
-defineProperty(Map, Symbol.species, {
+defineProperty(Map, _Symbol.species, {
                 get: Map_species, enumerable: false });
 
 // ------------------------------------------------------------
@@ -60,8 +60,8 @@ defineNotEnum(Map_prototype, 'forEach', map_foreach);
 defineNotEnum(Map_prototype, 'keys',    map_keys);
 defineProperty(Map_prototype,'size',    { get: map_siz, configurable: true });
 defineNotEnum(Map_prototype, 'values',  map_values);
-defineConfig(Map_prototype, Symbol.toStringTag, 'Map');
-defineNotEnum(Map_prototype, Symbol.iterator, map_entries);
+defineConfig(Map_prototype,  _Symbol.toStringTag, 'Map');
+defineNotEnum(Map_prototype, _Symbol.iterator, map_entries);
 
 // ------------------------------------------------------------
 //
@@ -69,13 +69,13 @@ defineNotEnum(Map_prototype, Symbol.iterator, map_entries);
 //
 // ------------------------------------------------------------
 
-const map_iterator_symbol = Symbol('map_iterator');
+const map_iterator_symbol = _Symbol('map_iterator');
 const map_iterator_prototype = { __proto__: _shadow.this_iterator };
 defineNotEnum(map_iterator_prototype, 'next', function next () {
     return map_or_set_iterator_next(
             js_private_object(this, map_iterator_symbol));
 });
-defineConfig(map_iterator_prototype, Symbol.toStringTag, 'Map Iterator');
+defineConfig(map_iterator_prototype, _Symbol.toStringTag, 'Map Iterator');
 
 function map_entries () {
     const map = js_private_object(this, map_symbol);
@@ -170,7 +170,7 @@ overrideFunctionName(map_siz, 'get size');
 //
 // ------------------------------------------------------------
 
-const set_symbol = Symbol('set');
+const set_symbol = _Symbol('set');
 
 function Set (iterable) {
 
@@ -194,7 +194,7 @@ _shadow.Set = Set; // keep a copy
 // note, not same function object as Map[Symbol.species]
 const Set_species = (function () { return this });
 overrideFunctionName(Set_species, 'get [Symbol.species]');
-defineProperty(Set, Symbol.species, {
+defineProperty(Set, _Symbol.species, {
                 get: Set_species, enumerable: false });
 
 // ------------------------------------------------------------
@@ -213,8 +213,8 @@ defineNotEnum(Set_prototype, 'forEach', set_foreach);
 defineProperty(Set_prototype,'size',    { get: set_siz, configurable: true });
 defineNotEnum(Set_prototype, 'values',  set_values);
 defineNotEnum(Set_prototype, 'keys',    set_keys);
-defineConfig(Set_prototype, Symbol.toStringTag, 'Set');
-defineNotEnum(Set_prototype, Symbol.iterator, set_values);
+defineConfig(Set_prototype,  _Symbol.toStringTag, 'Set');
+defineNotEnum(Set_prototype, _Symbol.iterator, set_values);
 
 // ------------------------------------------------------------
 //
@@ -222,13 +222,13 @@ defineNotEnum(Set_prototype, Symbol.iterator, set_values);
 //
 // ------------------------------------------------------------
 
-const set_iterator_symbol = Symbol('set_iterator');
+const set_iterator_symbol = _Symbol('set_iterator');
 const set_iterator_prototype = { __proto__: _shadow.this_iterator };
 defineNotEnum(set_iterator_prototype, 'next', function next () {
     return map_or_set_iterator_next(
             js_private_object(this, set_iterator_symbol));
 });
-defineConfig(set_iterator_prototype, Symbol.toStringTag, 'Set Iterator');
+defineConfig(set_iterator_prototype, _Symbol.toStringTag, 'Set Iterator');
 
 function set_entries () {
     const map = js_private_object(this, set_symbol);

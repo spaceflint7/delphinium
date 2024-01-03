@@ -105,6 +105,7 @@ struct js_environ {
     int first_private_field;
 
     int next_unique_id;
+    uint64_t math_random_state;
 
     js_try *try_handler;
     js_val shadow_obj;

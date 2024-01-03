@@ -38,7 +38,7 @@ defineProperty(Symbol, 'prototype', {
 defineProperty(_global, 'Symbol', { configurable: true,
     value: Symbol, writable: true, /* not enumerable */ });
 
-_shadow.Symbol = Symbol; // keep a copy
+_shadow.Symbol = _Symbol = Symbol; // keep a copy
 
 // ------------------------------------------------------------
 //

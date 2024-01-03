@@ -166,7 +166,7 @@ function log2obj (arg) {
     tag = get_constructor_name(proto, arg);
     if (typeof(tag) !== 'string') {
 
-        tag = arg[Symbol.toStringTag];
+        tag = arg[_Symbol.toStringTag];
         if (typeof(tag) !== 'string') {
             tag = _shadow.Object_getSpecialTag(arg) || '';
             if (tag === 'Arguments')
@@ -216,7 +216,7 @@ function log2obj (arg) {
 
             let name = proto.constructor.name;
             if (proto === Function.prototype) {
-                const tag = arg[Symbol.toStringTag];
+                const tag = arg[_Symbol.toStringTag];
                 if (tag)
                     name = 'Function [' + tag + ']';
             } else if (name === 'Object')
@@ -405,6 +405,6 @@ console.trace = function trace () {
 // Symbol.toStringTag
 //
 
-defineConfig(console, Symbol.toStringTag, 'console');
+defineConfig(console, _Symbol.toStringTag, 'console');
 
 })()    // Console_init

@@ -362,7 +362,8 @@ static js_val js_num_binary_op (js_environ *env, int op,
                                             left.num));
 
         case 0x2A2A:    // power **
-            return js_make_number(pow(left.num, right.num));
+            return js_make_number(
+                            js_pow(left.num, right.num));
 
         case '|':
             return js_make_number(

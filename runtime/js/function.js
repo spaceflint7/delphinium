@@ -103,7 +103,7 @@ function toString () {
 // see js_hasinstance defined in func.c
 //
 
-defineProperty(Function_prototype, Symbol.hasInstance,
+defineProperty(Function_prototype, _Symbol.hasInstance,
     { value: _shadow.js_hasinstance });
 
 //
@@ -113,10 +113,10 @@ defineProperty(Function_prototype, Symbol.hasInstance,
 // an array of parameters into the arguments object.
 //
 
-const arguments_symbol = Symbol('arguments_symbol');
+const arguments_symbol = _Symbol('arguments_symbol');
 _shadow.arguments_symbol = arguments_symbol;
 
-const array_iterator = ([])[Symbol.iterator];
+const array_iterator = ([])[_Symbol.iterator];
 
 _shadow.js_arguments = function (input_array) {
 
@@ -147,7 +147,7 @@ _shadow.js_arguments = function (input_array) {
     }
 
     // array-like iterator for argument properties
-    defineNotEnum(arguments_object, Symbol.iterator, array_iterator);
+    defineNotEnum(arguments_object, _Symbol.iterator, array_iterator);
 
     return arguments_object;
 }
@@ -204,7 +204,7 @@ defineConfig(GeneratorFunction_prototype, 'prototype',
                 Generator.prototype);
 defineConfig(GeneratorFunction_prototype, 'constructor',
                 GeneratorFunction);
-defineConfig(GeneratorFunction_prototype, Symbol.toStringTag,
+defineConfig(GeneratorFunction_prototype, _Symbol.toStringTag,
                 'GeneratorFunction');
 
 defineProperty(GeneratorFunction, 'prototype',
@@ -219,7 +219,7 @@ _shadow.GeneratorFunction = GeneratorFunction;
 
 function Generator () { }
 
-const generator_context_symbol = Symbol('generator_context_symbol');
+const generator_context_symbol = _Symbol('generator_context_symbol');
 Generator.context_symbol = generator_context_symbol;
 Generator.wrapper_prototype = GeneratorFunction_prototype;
 
@@ -234,8 +234,7 @@ defineNotEnum(Generator_prototype, 'next',   Generator_next);
 defineNotEnum(Generator_prototype, 'return', Generator_return);
 defineNotEnum(Generator_prototype, 'throw',  Generator_throw);
 
-defineConfig(Generator_prototype, Symbol.toStringTag,
-                'Generator');
+defineConfig(Generator_prototype, _Symbol.toStringTag, 'Generator');
 
 _shadow.Generator = Generator;
 

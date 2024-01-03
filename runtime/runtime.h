@@ -480,6 +480,31 @@ struct js_environ {
                       |  js_version_number            /* << 0*/)
 
 //
+// math helpers
+//
+
+/*__forceinline double js_hypot (double x, double y) {
+    return ((isfinite(x) && isfinite(y))
+                ? hypot(x, y) : js_nan.num);}*/
+
+__forceinline double js_pow (double x, double y) {
+    return (    (y == 0) ? 1
+             :  ((!isfinite(y)
+                        && (x == 1 || x == -1))
+                    ? js_nan.num
+             :  pow(x, y)));
+}
+
+__forceinline double js_round (double x) {
+    return copysign(floor(x + 0.5), x);
+}
+
+__forceinline double js_sign (double x) {
+    return (    (x == 0 || x != x) ? x
+             : ((x < 0) ? -1 : 1));
+}
+
+//
 // code generation macros
 //
 

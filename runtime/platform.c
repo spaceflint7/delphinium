@@ -82,6 +82,22 @@ void js_coroutine_switch2 (
 }
 
 // ------------------------------------------------------------
+//
+// current_time - Windows x64
+//
+// ------------------------------------------------------------
+
+int64_t js_current_time () {
+
+    union {
+        FILETIME ft;
+        int64_t i64;
+    } u;
+    // in units of 100-nanosecond, which we convert
+    // to units of microsecond, where 1ms == 1000ns
+    GetSystemTimeAsFileTime(&u.ft);
+    return u.i64 * 10;
+}
 
 #else
 #error unknown arch

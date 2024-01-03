@@ -11,6 +11,7 @@
 const _global = global;
 const _shadow = _global.shadow;
 delete _global.shadow;
+let _Symbol;
 
 // ------------------------------------------------------------
 //

@@ -548,7 +548,7 @@ function toString () {
         tag = 'Function';
 
     else if (typeof(this) === 'object') {
-        tag = this[Symbol.toStringTag];
+        tag = this[_Symbol.toStringTag];
         if (typeof(tag) !== 'string') {
             if (_shadow.isArray(this))
                 tag = 'Array';
