@@ -90,4 +90,8 @@ defineNotEnum(BigInt, 'asIntN', function asIntN (bits, v) {
 
 // ------------------------------------------------------------
 
+_shadow.big_0 = 0n; // gc reference to env->big_zero
+
+// ------------------------------------------------------------
+
 })()    // BigInt_init

@@ -48,7 +48,7 @@ const statement_writers = {
 // ------------------------------------------------------------
 
 const new_closure_var_prefix = 'js_val *';
-const new_closure_var_suffix = '=js_newclosure(env,NULL);'
+const new_closure_var_suffix = '=js_newclosure(func_val,NULL);'
 
 // ------------------------------------------------------------
 
@@ -608,7 +608,7 @@ function for_statement (stmt, output) {
                     // closure_var =
                     //      new_closure_var(closure_var),
                     line.substring(j, k)
-                +   '=js_newclosure(env,'
+                +   '=js_newclosure(func_val,'
                 +   line.substring(j, k)
                 +   '),';
             }

@@ -28,8 +28,8 @@
 //
 // ------------------------------------------------------------
 
-static void *js_newexobj (
-                    js_obj *proto, const js_shape *shape) {
+static void *js_newexobj (js_environ *env, js_obj *proto,
+                          const js_shape *shape) {
 
     // the low bits of the prototype pointer determine
     // the type of exotic object, and this in turn
@@ -47,8 +47,9 @@ static void *js_newexobj (
 
     // noe that the values are initially allocated just past
     // the object structure.  see also js_shape_switch ()
-    js_obj *obj = js_malloc(struct_size
-                          + max_values * sizeof(js_val));
+    const int obj_len = struct_size
+                      + max_values * sizeof(js_val);
+    js_obj *obj = js_malloc(obj_len);
 
     obj->proto = proto;
     obj->values = (js_val *)((uintptr_t)obj + struct_size);
@@ -66,7 +67,8 @@ static void *js_newexobj (
 
 js_val js_newobj (js_environ *env, const js_shape *shape, ...) {
 
-    js_obj *obj_ptr = (js_obj *)js_newexobj(env->obj_proto, shape);
+    js_obj *obj_ptr = (js_obj *)js_newexobj(
+                            env, env->obj_proto, shape);
     int num_values = shape->num_values;
     if (num_values) {
         js_val *values = obj_ptr->values;
@@ -76,7 +78,7 @@ js_val js_newobj (js_environ *env, const js_shape *shape, ...) {
             *values++ = va_arg(args, js_val);
         va_end(args);
     }
-    return js_make_object(obj_ptr);
+    return js_gc_manage(env, js_make_object(obj_ptr));
 }
 
 // ------------------------------------------------------------
@@ -238,6 +240,12 @@ static void js_newobj2_spread (js_environ *env,
             }
             if (i == -1)
                 continue; // skip property in list
+
+        } else {
+            // called from js_newobj2 () for an object
+            // that was already introduced to the gc
+            if (js_is_object_or_primitive(src_value))
+                js_gc_notify(env, src_value);
         }
 
         js_val *dst_value = js_ownprop(env, dst, prop, true);
@@ -294,11 +302,14 @@ js_val js_newobj2 (js_environ *env, js_val obj, js_val proto,
 
                 js_val *ptr_value =
                             js_ownprop(env, obj, prop, true);
-
-                if (js_is_descriptor(*ptr_value))
-                    free(js_get_pointer(*ptr_value));
-
+                js_val old_val = *ptr_value;
                 *ptr_value = value;
+
+                if (js_is_descriptor(old_val))
+                    js_gc_free(env, js_get_pointer(old_val));
+
+                if (js_is_object_or_primitive(value))
+                    js_gc_notify(env, value);
             }
         }
         va_end(args);
@@ -334,10 +345,10 @@ js_val js_restobj (js_environ *env, js_val from_obj,
         skip_list_ptr = skip_list;
     }
 
-    js_val new_obj = js_make_object(
-            js_newexobj(env->obj_proto, env->shape_empty));
+    js_val new_obj = js_make_object(js_newexobj(env,
+                        env->obj_proto, env->shape_empty));
     js_newobj2_spread(env, new_obj, from_obj, skip_list_ptr);
-    return new_obj;
+    return js_gc_manage(env, new_obj);
 }
 
 // ------------------------------------------------------------
@@ -402,9 +413,16 @@ static js_val js_private_object (js_c_func_args) {
             if (obj_ptr->max_values & js_obj_not_extensible)
                 break;
 
+            if (obj_ptr->max_values > 1) {
+                // we are switching from a shape with zero
+                // values to a shape with two values, but
+                // js_shape_switch only sets one new value
+                obj_ptr->values[1] = js_deleted;
+            }
+
             // switch to an object with two hidden values,
             // see also shape.c
-            js_shape_switch(obj_ptr, 0,
+            js_shape_switch(env, obj_ptr, 0,
                             private_object_type_symbol,
                             env->shape_private_object);
 

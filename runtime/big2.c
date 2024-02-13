@@ -12,7 +12,7 @@ js_val js_newbig (js_environ *env, int len, uint32_t *ptr) {
     while (len--)
         *ptr2++ = *ptr++;
     js_big_trim(big, ptr2);
-    return js_make_primitive(big, js_prim_is_bigint);
+    return js_make_primitive_bigint(big); // not gc managed
 }
 
 // ------------------------------------------------------------
@@ -78,7 +78,7 @@ static js_val js_big_from_num (js_environ *env, js_val input) {
         }
     }
 
-    return (big ? js_make_primitive(big, js_prim_is_bigint)
+    return (big ? js_make_primitive_bigint_gc(big)
                 : js_undefined);
 }
 
@@ -185,8 +185,15 @@ static js_val js_big_from_str (js_environ *env, js_val input) {
         ok = true;
     }
 
-    if (!ok)
+    if (!ok) {
         output = js_undefined;
+
+        // don't let the compiler optimize away the reference
+        // to the 'input' parameter, to prevent gc freeing it
+        // while we are still accessing the input text buffer
+        volatile js_val dont_discard_input = input;
+        (void)dont_discard_input;
+    }
 
     return output;
 }
@@ -200,7 +207,8 @@ static js_val js_big_from_str (js_environ *env, js_val input) {
 static bool js_big_check_truthy (js_val value) {
 
     uint32_t *big = js_get_pointer(value);
-    bool is_zero = (big[0] == 1) && (big[1] == 0);
+    const uint32_t big_0_ = js_big_length(big);
+    bool is_zero = (big_0_ == 1) && (big[1] == 0);
     return !is_zero;
 }
 
@@ -253,6 +261,7 @@ static js_val js_big_tostring (
     // otherwise allocate a larger buffer
 
     uint32_t *ptr = js_get_pointer(val);
+    uint32_t  len = js_big_length(ptr);
 
     // rough estimate of log(2**32) / log(radix)
     uint32_t buf_size = num_string_buffer_size - 4;
@@ -261,26 +270,26 @@ static js_val js_big_tostring (
     const uint32_t words_in_buffer =
                         buf_size / chars_per_word;
 
-    char *ch0, *ptr_to_free;
-    if (*ptr <= words_in_buffer) {
+    char *ch0, *buf_to_free;
+    if (len <= words_in_buffer) {
         // input value will fit in the default buffer
         ch0 = env->num_string_buffer;
-        ptr_to_free = NULL;
+        buf_to_free = NULL;
     } else {
         // input value is too long to fit in the
         // default buffer and requires a dedicated one
-        buf_size = (*ptr + 1) * chars_per_word;
+        buf_size = (len + 1) * chars_per_word;
         ch0 = js_malloc(buf_size + 4);
-        ptr_to_free = ch0;
+        buf_to_free = ch0;
     }
 
     // if input value is negative, insert a minus sign
     char *chL = ch0;
-    if ((int32_t)ptr[*ptr] >> 31) {
+    if ((int32_t)ptr[len] >> 31) {
         *chL++ = '-';
         // negate the input because division is unsigned
-        ptr = js_big_negate2(env, 1ULL, ptr, *ptr);
-        val = js_make_primitive(ptr, js_prim_is_bigint);
+        ptr = js_big_negate2(env, 1ULL, ptr, len);
+        val = js_make_primitive_bigint_gc(ptr);
     }
 
     char *chR = ch0 + buf_size;
@@ -296,7 +305,8 @@ static js_val js_big_tostring (
 
         // stop looping when the value becomes zero
         ptr = js_get_pointer(val);
-        if (ptr[0] == 1 && ptr[1] == 0)
+        const uint32_t ptr_0_ = js_big_length(ptr);
+        if ((ptr_0_ == 1) && (ptr[1] == 0))
             break;
     }
 
@@ -305,7 +315,7 @@ static js_val js_big_tostring (
         *chL++ = *chR++;
 
     js_val ret_val = js_str_c2(env, ch0, chL - ch0);
-    free(ptr_to_free);
+    js_free(buf_to_free);
     return ret_val;
 }
 
@@ -318,7 +328,7 @@ static js_val js_big_tostring (
 static js_val js_big_binary_op (js_environ *env, int op,
                                 js_val left, js_val right) {
 
-    js_val remainder;
+    js_val remainder = { .raw = 0 };
     switch (op) {
 
         case '+':
@@ -371,7 +381,7 @@ static js_val js_big_truncate (js_environ *env, js_val input,
                                uint64_t bits, bool add_zero) {
 
     uint32_t *input_ptr = js_get_pointer(input);
-    uint32_t input_len = *input_ptr;
+    uint32_t input_len = js_big_length(input_ptr);
 
     uint64_t output_len = (bits + 31) >> 5;
     if (output_len > input_len)
@@ -399,7 +409,7 @@ static js_val js_big_truncate (js_environ *env, js_val input,
     }
 
     js_big_trim(output_big, output_ptr + 1);
-    return js_make_primitive(output_big, js_prim_is_bigint);
+    return js_make_primitive_bigint_gc(output_big);
 }
 
 // ------------------------------------------------------------
@@ -500,8 +510,9 @@ static js_val js_big_unary_negate (js_environ *env,
 
     uint64_t carry = zero_for_negate_or_one_for_bitwise_not;
     uint32_t *ptr = js_get_pointer(input);
-    uint32_t *output = js_big_negate2(env, carry, ptr, *ptr);
-    return js_make_primitive(output, js_prim_is_bigint);
+    uint32_t  len = js_big_length(ptr);
+    uint32_t *output = js_big_negate2(env, carry, ptr, len);
+    return js_make_primitive_bigint_gc(output);
 }
 
 // ------------------------------------------------------------

@@ -242,7 +242,8 @@ static js_val *js_ownprop (
     }
 
     // note that we initialize the new property to js_deleted
-    js_shape_switch(obj_ptr, old_count, js_deleted, new_shape);
+    js_shape_switch(
+            env, obj_ptr, old_count, js_deleted, new_shape);
     return &obj_ptr->values[old_count];
 }
 
@@ -256,8 +257,10 @@ static void js_obj_init (js_environ *env) {
 
     // allocate an empty object with a null prototype,
     // then make it the default prototype for Object
-    env->obj_proto = js_newexobj(NULL, env->shape_empty);
-    env->obj_proto_val = js_make_object(env->obj_proto);
+    env->obj_proto = js_newexobj(
+                            env, NULL, env->shape_empty);
+    env->obj_proto_val =
+        js_gc_manage(env, js_make_object(env->obj_proto));
 
     // allocate the global object, but store it in the
     // environment with a flag bit.  this is used by

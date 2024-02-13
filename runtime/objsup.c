@@ -70,6 +70,10 @@ static js_val js_getOrSetPrototype (js_c_func_args) {
         //
 
         if (js_is_object(proto_val)) {
+            // make sure the gc marks 'proto_val', even
+            // in the case that nothing else references
+            // it, and 'obj_val' was already scanned
+            js_gc_notify(env, proto_val);
             // prototype is the object passed as 'proto_val'
             // combined with the low 3 bits from its own
             // js_obj->proto field, as these bits determine

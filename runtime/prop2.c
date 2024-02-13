@@ -45,6 +45,18 @@ js_val js_setprop (js_environ *env, js_val obj, js_val prop,
     if (value.raw == js_deleted.raw)
         value = js_undefined;
 
+    else if (js_is_object_or_primitive(value)) {
+        // gc might miss a value in a scenario such as:
+        // obj2[prop] = obj1[prop] ; delete obj1[prop]
+        // this occurs when obj1 was not yet scanned
+        // by the gc, but obj2 was already scanned.
+        // we work around this issue by notifying the
+        // gc whenever any object or primitive value
+        // is set as a property on an object or array.
+        // see also property_writer.js
+        js_gc_notify(env, value);
+    }
+
     // first thing we do is identify the object that we need
     // to scan:  the input object, if it is really an object.
     // or if primitive, this is the corresponding prototype.
@@ -275,7 +287,8 @@ static void js_setprop_object (js_environ *env,
         new_shape = js_shape_new(
                         env, old_shape, old_count, prop_key);
     }
-    js_shape_switch(obj_ptr, old_count, value, new_shape);
+    js_shape_switch(
+            env, obj_ptr, old_count, value, new_shape);
 
     // value was found directly on the object, we can cache
     // the shape id and array index, see also js_getprop ()
@@ -411,22 +424,21 @@ static bool js_setprop_array_length (
 
         js_val old_val = arr->values[--old_length];
 
-        if (js_is_descriptor(old_val)) {
+        if (unlikely(js_is_descriptor(old_val))) {
             js_descriptor *descr =
                 (js_descriptor *)js_get_pointer(old_val);
             const int flags =
                 js_descr_flags_without_setter(descr);
             if (!(flags & js_descr_write)) {
-
                 // a non-configurable element was found
                 ++old_length;
                 break;
             }
 
-            free(descr);
-        }
-
-        arr->values[old_length] = js_deleted;
+            arr->values[old_length] = js_deleted;
+            js_gc_free(env, descr);
+        } else
+            arr->values[old_length] = js_deleted;
 
         if (old_length == new_length)
             break;

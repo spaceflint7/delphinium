@@ -44,6 +44,7 @@ tests: $(RUNTIME) FORCE
 	@$(MAKE) -s test/suite/declarations.test
 	@$(MAKE) -s test/suite/destructuring.test
 	@$(MAKE) -s test/suite/exceptions.test
+	@$(MAKE) -s test/suite/garbage_collector.test
 	@$(MAKE) -s test/suite/math.test
 	@$(MAKE) -s test/suite/new_constructors.test
 	@$(MAKE) -s test/suite/numeric_loops.test
@@ -73,14 +74,14 @@ test/%.js: $(RUNTIME) FORCE
 #
 
 RUNTIME_DEPS_C = $(wildcard runtime/*.c) $(wildcard runtime/include/*.c)
-RUNTIME_DEPS_H = $(wildcard runtime/*.h) $(wildcard runtime/include/*.h)
+RUNTIME_DEPS_H = $(wildcard runtime/*.h) $(wildcard runtime/include/*.h) Makefile
 RUNTIME_DEPS_JS = $(wildcard runtime/js/*.js)
 
 $(RUNTIME1): $(RUNTIME_DEPS_C) $(RUNTIME_DEPS_H)
 	@mkdir -p $(OBJDIR)
 	$(GCC) $(RUNTIME1) -c runtime/runtime.c
 
-$(RUNTIME2): $(RUNTIME_DEPS_JS) $(RUNTIME1)
+$(RUNTIME2): $(RUNTIME_DEPS_JS) $(RUNTIME_DEPS_H)
 	$(GCC) $(OBJDIR)/runtime2.js -E -P -x c runtime/js/main.js
 	echo '#define js_main js_init2' > $(OBJDIR)/runtime2.c
 	node index.js $(OBJDIR)/runtime2.js >> $(OBJDIR)/runtime2.c

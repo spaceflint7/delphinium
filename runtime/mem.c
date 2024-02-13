@@ -1,7 +1,9 @@
 
+// ------------------------------------------------------------
 //
 // js_check_alloc
 //
+// ------------------------------------------------------------
 
 static void *js_check_alloc (void *ptr) {
 
@@ -15,9 +17,11 @@ static void *js_check_alloc (void *ptr) {
     return ptr;
 }
 
+// ------------------------------------------------------------
 //
-// js_malloc
+// js_malloc / js_calloc
 //
+// ------------------------------------------------------------
 
 static void *js_malloc (int size) {
 
@@ -28,3 +32,5 @@ static void *js_calloc (int count, int size) {
 
     return js_check_alloc(calloc(count, size));
 }
+
+#define js_free free

@@ -85,7 +85,7 @@ js_val js_scopewith (js_environ *env, js_val func, js_val obj) {
         with_scope = func_obj->u.with_scope;
         if (with_scope) {
             func_obj->u.with_scope = with_scope->next;
-            free(with_scope);
+            js_gc_free(env, with_scope);
         }
 
     } else if (js_is_flagged_pointer(obj)) {
@@ -105,7 +105,11 @@ js_val js_scopewith (js_environ *env, js_val func, js_val obj) {
             with_scope->value = old_with_scope->value;
             with_scope->next = NULL;
             with_scope->prev = NULL;
-            with_scope->depth = 0;
+            // barrier to make sure that the above init
+            // is visible to the concurrent gc thread,
+            // by the time 'it sees the new 'with_scope'
+            js_compare_and_swap_32(
+                        &with_scope->depth, 0U, 0U);
 
             if (!new_with_scope)
                 func_obj->u.with_scope = with_scope;
@@ -126,7 +130,9 @@ js_val js_scopewith (js_environ *env, js_val func, js_val obj) {
         with_scope->value = obj;
         with_scope->next = func_obj->u.with_scope;
         with_scope->prev = NULL;
-        with_scope->depth = 0;
+        // barrier for cache coherence, see above
+        js_compare_and_swap_32(
+                        &with_scope->depth, 0U, 0U);
 
         func_obj->u.with_scope = with_scope;
     }

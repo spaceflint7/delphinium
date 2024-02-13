@@ -44,6 +44,16 @@ static js_val js_big_unary_negate (js_environ *env,
 static js_val js_obj_to_primitive_string (
                             js_environ *env, js_val obj_val);
 
+#define js_emptyobj(env) js_newobj((env), (env)->shape_empty)
+
+#define js_newprop(env,obj,prop) *js_ownprop((env),(obj),(prop),true)
+
+static void *js_newexobj (js_environ *env, js_obj *proto,
+                          const js_shape *shape);
+
+static js_val *js_ownprop (
+    js_environ *env, js_val obj, js_val prop, bool can_add);
+
 // ------------------------------------------------------------
 //
 // arr.c
@@ -73,22 +83,6 @@ static js_val js_callshadow (js_environ *env,
 
 #define js_callthrow(func_name) \
                     js_callshadow(env,func_name,js_undefined)
-
-// ------------------------------------------------------------
-//
-// obj.c
-//
-// ------------------------------------------------------------
-
-#define js_emptyobj(env) js_newobj((env), (env)->shape_empty)
-
-#define js_newprop(env,obj,prop) *js_ownprop((env),(obj),(prop),true)
-
-static void *js_newexobj (
-                    js_obj *proto, const js_shape *shape);
-
-static js_val *js_ownprop (
-    js_environ *env, js_val obj, js_val prop, bool can_add);
 
 // ------------------------------------------------------------
 //
@@ -128,11 +122,51 @@ static void js_throw_if_strict (
 
 // ------------------------------------------------------------
 //
+// gc.c
+//
+// ------------------------------------------------------------
+
+static js_val js_gc_manage (js_environ *env, js_val val);
+
+static void js_gc_notify (js_environ *env, js_val val);
+
+static void js_gc_free (js_environ *env, void *ptr);
+
+// ------------------------------------------------------------
+//
 // platform
 //
 // ------------------------------------------------------------
 
-int64_t js_current_time ();
+struct js_thread *js_thread_new (
+                        void (*func)(void *), void *arg);
+
+struct js_mutex *js_mutex_new ();
+void js_mutex_enter (struct js_mutex *mutex);
+void js_mutex_leave (struct js_mutex *mutex);
+
+struct js_event *js_event_new ();
+void js_event_post (struct js_event *event);
+void js_event_wait (struct js_event *event,
+                    struct js_mutex *mutex,
+                    uint32_t timeout_in_ms_or_minus1);
+
+struct js_lock *js_lock_new ();
+void js_lock_free (struct js_lock *lock);
+void js_lock_enter_shr (struct js_lock *lock);
+void js_lock_leave_shr (struct js_lock *lock);
+void js_lock_enter_exc (struct js_lock *lock);
+void js_lock_leave_exc (struct js_lock *lock);
+
+// interlocked compare and swap with memory barrier
+uint16_t js_compare_and_swap_16 (
+    void *ptr, uint16_t and_mask, uint16_t or_bits);
+uint32_t js_compare_and_swap_32 (
+    void *ptr, uint32_t and_mask, uint32_t or_bits);
+
+//void js_platform_init ();
+uint64_t js_current_time ();
+//uint64_t js_elapsed_time ();
 
 // ------------------------------------------------------------
 //

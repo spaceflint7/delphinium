@@ -142,4 +142,21 @@ _shadow.for_in_iterator = function for_in_iterator (obj) {
 
 // ------------------------------------------------------------
 
+const js_gc_util = _shadow.js_gc_util;
+const _gc = function gc (full) { return js_gc_util(full !== false); }
+// number of values managed by the gc, updated each sweep
+defineProperty(_gc, 'vcount',
+        { get() { return js_gc_util.number; } });
+
+// number of new values created before sweep is requested
+var _gc_threshold;
+defineProperty(_gc, 'threshold',
+    { get() { return _gc_threshold; },
+      set(v) { if ((v = +v) > 1)
+                    js_gc_util(null, _gc_threshold = v); }});
+
+_global.gc = _gc;
+
+// ------------------------------------------------------------
+
 })()    // Utils_init

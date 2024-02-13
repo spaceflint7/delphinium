@@ -187,6 +187,7 @@ function member_expression_object (expr, set_expr) {
 
         // set 'set_expr' to the translated expression,
         // for use by member_expression_array_length ()
+        // and js_is_object_or_primitive (), just below
         set_expr = value1;
 
         value2 = ',' + value1;  // as parameter
@@ -199,6 +200,10 @@ function member_expression_object (expr, set_expr) {
 
         // add a check to avoid propagating js_deleted
         check_txt += `&&(${set_expr}.raw!=js_deleted.raw)`;
+
+        // if value type is object/string/symbol/bigint,
+        // must call js_setprop () to notify gc
+        check_txt += `&&(!js_is_object_or_primitive(${set_expr}))`;
     }
 
     // build the access text for a 'get' operation:   check
@@ -295,6 +300,10 @@ function member_expression_array (expr, set_expr) {
 
         // add a check to avoid propagating js_deleted
         check_text += `(${value}.raw!=js_deleted.raw)&&`;
+
+        // if value type is object/string/symbol/bigint,
+        // must call js_setprop () to notify gc
+        check_text += `(!js_is_object_or_primitive(${value}))&&`;
 
         return `(${init_text}(likely(${check_text}`
              + `${prop_u}<${arr_obj}->capacity)`

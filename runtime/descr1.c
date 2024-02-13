@@ -143,15 +143,16 @@ static js_val js_getOwnProperty_2 (
 
         if (flags & (js_descr_getter | js_descr_setter)) {
 
+            const void *p;
             value = writable = js_deleted;
-            getter = (descr->data_or_getter.raw & 0xFFFFFFFFFFF8)
-                   ? js_make_object(
-                        js_get_pointer(descr->data_or_getter))
-                   : js_undefined;
-            setter = (descr->setter_and_flags.raw & 0xFFFFFFFFFFF8)
-                   ? js_make_object(
-                        js_get_pointer(descr->setter_and_flags))
-                   : js_undefined;
+
+            getter = ((flags & js_descr_getter) &&
+                (p = js_get_pointer(descr->data_or_getter)))
+            ?   js_make_object(p) : js_undefined;
+
+            setter = ((flags & js_descr_setter) &&
+                (p = js_get_pointer(descr->setter_and_flags)))
+            ?   js_make_object(p) : js_undefined;
 
         } else {
 
@@ -170,7 +171,8 @@ static js_val js_getOwnProperty_2 (
             value = js_undefined;
     }
 
-    js_obj *obj = js_newexobj(env->obj_proto, env->descr_shape);
+    js_obj *obj = js_newexobj(env, env->obj_proto,
+                              env->descr_shape);
     js_val *values = obj->values;
 
     values[0] = value;
@@ -180,7 +182,7 @@ static js_val js_getOwnProperty_2 (
     values[4] = enumerable;
     values[5] = configurable;
 
-    return js_make_object(obj);
+    return js_gc_manage(env, js_make_object(obj));
 }
 
 // ------------------------------------------------------------

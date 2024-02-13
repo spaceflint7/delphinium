@@ -336,7 +336,7 @@ _shadow.ReferenceError_not_defined = function throw_ReferenceError (prop) {
 
 _shadow.RangeError_array_length = function throw_RangeError () {
 
-    throw ReferenceError('Invalid array length');
+    throw RangeError('Invalid array length');
 }
 
 _shadow.RangeError_invalid_argument = function throw_RangeError () {
@@ -352,6 +352,11 @@ _shadow.RangeError_division_by_zero = function throw_RangeError () {
 _shadow.RangeError_bigint_too_large = function throw_RangeError () {
 
     throw RangeError('BigInt value is too large');
+}
+
+_shadow.RangeError_property_count = function throw_RangeError () {
+
+    throw RangeError('Too many properties');
 }
 
 _shadow.SyntaxError_invalid_argument = function throw_SyntaxError () {

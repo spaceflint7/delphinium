@@ -1,14 +1,15 @@
 
 // ------------------------------------------------------------
 //
-// macros and flags
+// string
 //
 // ------------------------------------------------------------
 
-#define js_str_is_string   1
-#define js_str_is_symbol   2
-#define js_str_in_objset   4
-#define js_str_is_static   8
+#define js_make_primitive_string(p) \
+    js_make_primitive((p), js_prim_is_string)
+
+#define js_make_primitive_symbol(p) \
+    js_make_primitive((p), js_prim_is_symbol)
 
 // ------------------------------------------------------------
 //
@@ -33,55 +34,59 @@ static bool js_str_is_white_space (wchar_t ch) {
 
 // ------------------------------------------------------------
 //
+// js_str_is_interned
+// js_str_intern
+//
+// ------------------------------------------------------------
+
+#define js_str_is_interned(id)              \
+    ((id)->flags & js_str_in_objset)
+
+#define js_str_flag_as_interned(id)         \
+    js_compare_and_swap_16(&(id)->flags,    \
+            (uint16_t)-1, js_str_in_objset)
+
+#define js_str_intern(id) {                 \
+    objset_id *id2 = objset_intern(         \
+            &env->strings_set, (id), NULL); \
+    if (likely(id2 != (id))) {              \
+        js_check_alloc(id2);                \
+        (id) = id2;                         \
+    } else if (!js_str_is_interned(id))     \
+        js_str_flag_as_interned(id); }
+
+// ------------------------------------------------------------
+//
 // js_newstr
 //
 // this function should be called during the initialization
 // of a module, to initialize all the strings used in that
 // module.  the input pointer should point to static data,
+// which can
 // and the program should not modify the memory bytes at the
 // pointer after passing it to this function.
 //
 // the 'intern' parameter is a performance hint that says
 // the string will index into objects, so should be interned.
 //
+// strings created by js_newstr () are not tracked by
+// the gc, see also gc_mark_vals ()
+//
 // ------------------------------------------------------------
 
-js_val js_newstr (js_environ *env, bool intern,
-                  int len, wchar_t *ptr) {
+js_val js_newstr (js_environ *env, const wchar_t *ptr) {
 
     objset_id *id = (objset_id *)ptr;
-    id->len = len << 1;
-    id->flags = js_str_is_string;
-
-    if (intern) {
-        objset_id *id2 = js_check_alloc(objset_intern(
-                            &env->strings_set, id, NULL));
-        if (id2 == id) {
-            // the input id has been interned and returned,
-            // so we should flag the id as non-freeable
-            id->flags |= js_str_is_static | js_str_in_objset;
-
-        } else // we received an id that was already interned
-            id = id2;
+    const int objset_flag_or_zero = id->flags ^
+                (js_str_is_string | js_str_is_static);
+    if (objset_flag_or_zero == js_str_in_objset) {
+        js_str_intern(id);
+    } else if (objset_flag_or_zero) {
+        fprintf(stderr, "Bad string!\n");
+        exit(1);
     }
-
-    return js_make_primitive(id, js_prim_is_string);
+    return js_make_primitive_string(id);
 }
-
-// ------------------------------------------------------------
-//
-// js_str_is_interned
-// js_str_intern
-//
-// ------------------------------------------------------------
-
-#define js_str_is_interned(id) \
-    ((id)->flags & js_str_in_objset)
-
-#define js_str_intern(set,id)                   \
-    id = js_check_alloc(                        \
-            objset_intern((set), (id), NULL));  \
-    id->flags |= js_str_in_objset;
 
 // ------------------------------------------------------------
 //
@@ -105,7 +110,8 @@ static js_val js_str_c2 (js_environ *env,
     while (num_chars-- > 0)
         *ptr_wch++ = *ptr_chars++;
 
-    return js_make_primitive(id, js_prim_is_string);
+    return js_gc_manage(env,
+                js_make_primitive_string(id));
 }
 
 // ------------------------------------------------------------
@@ -116,25 +122,31 @@ static js_val js_str_c2 (js_environ *env,
 //
 // ------------------------------------------------------------
 
-static js_val js_str_c (js_environ *env, const char *ascii_text) {
+static js_val js_str_c (js_environ *env,
+                        const char *ascii_text) {
 
     int num_chars = strlen(ascii_text);
     if (!num_chars)
         return env->str_empty;
-    js_val new_str = js_str_c2(env, ascii_text, num_chars);
 
-    objset_id *id = (objset_id *)js_get_pointer(new_str);
-    objset_id *id2 = js_check_alloc(objset_intern(
-                        &env->strings_set, id, NULL));
+    js_val str = js_str_c2(env, ascii_text, num_chars);
+
+    objset_id *id = (objset_id *)js_get_pointer(str);
+    objset_id *id2 =
+            objset_intern(&env->strings_set, id, NULL);
+
     if (id2 == id) {
         // the input id has been interned and returned,
         // so we should flag the id as such
-        id->flags |= js_str_in_objset;
+        js_str_flag_as_interned(id);
 
-    } else // we received an id that was already interned
-        free(id);
+    } else {
+        // we received an id that was already interned
+        js_check_alloc(id2);
+        str = js_make_primitive_string(id2);
+    }
 
-    return js_make_primitive(id2, js_prim_is_string);
+    return str;
 }
 
 // ------------------------------------------------------------
@@ -143,32 +155,31 @@ static js_val js_str_c (js_environ *env, const char *ascii_text) {
 //
 // ------------------------------------------------------------
 
-static objset_id *js_str_search_or_intern (js_environ *env,
-                            const wchar_t *data, int wlen) {
+static js_val js_str_search_or_intern (
+        js_environ *env, const wchar_t *data, int wlen) {
 
     objset_id *id = objset_search(
                         env->strings_set, data, wlen);
-    if (!id) {
+    if (id)
+        return js_make_primitive_string(id);
 
-        id = js_malloc(sizeof(objset_id) + wlen);
-        id->len = wlen;
-        id->flags = js_str_is_string;
-        memcpy(id->data, data, wlen);
+    id = js_malloc(sizeof(objset_id) + wlen);
+    id->len = wlen;
+    id->flags = js_str_is_string | js_str_in_objset;
+    memcpy(id->data, data, wlen);
 
-        objset_id *id2 = js_check_alloc(objset_intern(
-                        &env->strings_set, id, NULL));
-        if (id2 == id) {
-            // the input id has been interned and returned,
-            // so we should flag the id as such
-            id->flags |= js_str_in_objset;
+    objset_id *id2 =
+        objset_intern(&env->strings_set, id, NULL);
 
-        } else { // we received an id that was already interned
-            free(id);
-            id = id2;
-        }
+    if (unlikely(id != id2)) {
+        // should never happen unless out of mem
+        js_check_alloc(id2);
+        fprintf(stderr, "Corrupted!\n");
+        exit(1); // __builtin_trap();
     }
 
-    return id;
+    return js_gc_manage(env,
+                js_make_primitive_string(id));
 }
 
 // ------------------------------------------------------------
@@ -195,7 +206,8 @@ static js_val js_str_concat (js_environ *env,
         return left;
 
     int len = left_id->len + right_id->len;
-    objset_id *new_id = js_malloc(sizeof(objset_id) + len);
+    objset_id *new_id = js_malloc(
+                            sizeof(objset_id) + len);
     new_id->len = len;
     new_id->flags = js_str_is_string;
 
@@ -203,7 +215,8 @@ static js_val js_str_concat (js_environ *env,
     memcpy((char *)new_id->data + left_id->len,
            right_id->data, right_id->len);
 
-    return js_make_primitive(new_id, js_prim_is_string);
+    return js_gc_manage(env,
+                js_make_primitive_string(new_id));
 }
 
 // ------------------------------------------------------------
@@ -422,7 +435,8 @@ static uint32_t js_str_is_length_or_number (
 //
 // ------------------------------------------------------------
 
-static js_val js_str_index (js_environ *env, uint32_t prop_idx) {
+static js_val js_str_index (js_environ *env,
+                            uint32_t prop_idx) {
 
     wchar_t digits[28]; // room for two copies
     int len_digits;
@@ -450,9 +464,8 @@ static js_val js_str_index (js_environ *env, uint32_t prop_idx) {
         len_digits = sizeof(wchar_t);
     }
 
-    objset_id *id = js_str_search_or_intern(
+    return js_str_search_or_intern(
                             env, digits, len_digits);
-    return js_make_primitive(id, js_prim_is_string);
 }
 
 // ------------------------------------------------------------
@@ -516,9 +529,8 @@ static js_val js_str_getprop (js_environ *env,
     if (prop_idx <= str_len) {
 
         const wchar_t *the_char = &str_ptr->data[prop_idx - 1];
-        objset_id *id = js_str_search_or_intern(
+        return js_str_search_or_intern(
                             env, the_char, sizeof(wchar_t));
-        return js_make_primitive(id, js_prim_is_string);
     }
 
     // property index is not 'length', and is not an integer
@@ -572,7 +584,7 @@ static js_val js_tostring (js_environ *env, js_val val) {
     // we should only get here for a symbol value, but
     // this is also a catch-all for any unexpected value
     js_callthrow("TypeError_convert_symbol_to_string");
-    return js_make_object(NULL);
+    return js_make_number(0);
 }
 
 // ------------------------------------------------------------
@@ -594,40 +606,44 @@ static js_val js_sym_util (js_c_func_args) {
     if (arg_ptr != js_stk_top)
         arg_val = arg_ptr->value;
 
-    if (js_is_primitive(arg_val)) {
+    do {
 
-        int type = js_get_primitive_type(arg_val);
-        if (type == js_prim_is_string
-        ||  type == js_prim_is_symbol) {
+        if (!js_is_primitive(arg_val))
+            break;
 
-            id = js_get_pointer(arg_val);
-            const void *data = id->data;
-            uint32_t len = id->len;
+        int prim_type = js_get_primitive_type(arg_val);
+        if (prim_type != js_prim_is_string
+        &&  prim_type != js_prim_is_symbol)
+            break;
 
-            id = js_malloc(sizeof(objset_id) + len);
-            memcpy(id->data, data, id->len = len);
+        id = js_get_pointer(arg_val);
 
-            if (type == js_prim_is_string) {
+        objset_id *id2 = js_malloc(
+                            sizeof(objset_id) + id->len);
+        memcpy(id2->data, id->data,
+                            (id2->len = id->len));
 
-                id->flags = js_str_is_symbol;
-                ret_val = js_make_primitive(
-                            id, js_prim_is_symbol);
-
-            } else {
-
-                id->flags = js_str_is_string;
-                ret_val = js_make_primitive(
-                            id, js_prim_is_string);
-            }
+        // return a symbol for a descr string,
+        // return a descr string for a symbol
+        if (prim_type == js_prim_is_string) {
+            id2->flags = js_str_is_symbol;
+            ret_val = js_make_primitive_symbol(id2);
+        } else {
+            id2->flags = js_str_is_string;
+            ret_val = js_make_primitive_string(id2);
         }
-    }
+        js_gc_manage(env, ret_val);
+
+    } while (false);
 
     js_return(ret_val);
 }
 
+// ------------------------------------------------------------
 //
 // js_str_print
 //
+// ------------------------------------------------------------
 
 static js_val js_str_print (js_c_func_args) {
 
@@ -657,9 +673,11 @@ static js_val js_str_print (js_c_func_args) {
     js_return(js_undefined);
 }
 
+// ------------------------------------------------------------
 //
 // js_str_init
 //
+// ------------------------------------------------------------
 
 static void js_str_init (js_environ *env) {
 
@@ -674,10 +692,10 @@ static void js_str_init (js_environ *env) {
     empty->flags = js_str_is_string
                  | js_str_in_objset
                  | js_str_is_static;
-    empty = objset_intern(
-                    &env->strings_set, empty, NULL);
-    env->str_empty =
-            js_make_primitive(empty, js_prim_is_string);
+    empty = js_check_alloc(objset_intern(
+                    &env->strings_set, empty, NULL));
+
+    env->str_empty = js_make_primitive_string(empty);
 
     //
     // define rest of the well-known strings

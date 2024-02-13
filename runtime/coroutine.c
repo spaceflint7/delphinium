@@ -21,8 +21,11 @@ typedef struct js_coroutine_context {
     js_link *stack_head;
     js_link *stack_tail;
     js_try *try_handler;
+    js_val new_target;
 
     js_environ *env;
+    void *internal2;
+    struct js_coroutine_context *next;
 
 } js_coroutine_context;
 
@@ -35,7 +38,7 @@ typedef struct js_coroutine_context {
 /* extern */ void js_coroutine_init2 (
                 js_environ *env, js_coroutine_context *ctx);
 
-/* extern */ bool js_coroutine_kill2 (
+/* extern */ void js_coroutine_kill2 (
                                 js_coroutine_context *ctx);
 
 /* extern */ void js_coroutine_switch2 (
@@ -46,11 +49,8 @@ typedef struct js_coroutine_context {
 
 // ------------------------------------------------------------
 
-// runtime.c declares 'included_from_runtime', so if not
-// defined, then we are probably being included from the
-// file platform.c, in which case, we want to stop here
-
-#ifdef included_from_runtime
+// stop here if being included from platform.c
+#ifndef included_from_platform
 
 // ------------------------------------------------------------
 //
@@ -91,20 +91,10 @@ js_val js_newcoroutine (js_environ *env,
 
 js_val js_yield (js_environ *env, js_val val) {
 
-    // save environment of coroutine
-    js_link *stk_top    = env->stack_top;
-    int      stk_size   = env->stack_size;
-    js_try  *try_hndlr  = env->try_handler;
-
     // resume execution in the caller's context
     int state = 0;
     js_coroutine_switch2(NULL, &state, &val);
     state &= ~js_coroutine_is_resumed;
-
-    // restore environment of coroutine
-    env->stack_top      = stk_top;
-    env->stack_size     = stk_size;
-    env->try_handler    = try_hndlr;
 
     // throw exception, if caller requested
     if (state)
@@ -124,20 +114,10 @@ js_val js_yield_star (js_environ *env, js_val iterable_val) {
 
     while (likely(iter[0].raw != 0)) {
 
-        // save environment of coroutine
-        js_link *stk_top    = env->stack_top;
-        int      stk_size   = env->stack_size;
-        js_try  *try_hndlr  = env->try_handler;
-
         // resume execution in the caller's context
         int state = js_coroutine_yield_star;
         js_coroutine_switch2(NULL, &state, &iter[2]);
         state &= ~js_coroutine_is_resumed;
-
-        // restore environment of coroutine
-        env->stack_top      = stk_top;
-        env->stack_size     = stk_size;
-        env->try_handler    = try_hndlr;
 
         // convert value 1 -- indicating throw (),
         // as sent by coroutine_resume () -- into
@@ -183,6 +163,22 @@ static js_val js_coroutine_init1 (
     ctx->value2 = this_val;
     ctx->state = 0; // normal running state
 
+    // insert the new context into a linked list,
+    // in which the head elem is the main context
+    js_coroutine_context *context_list_head =
+                            env->coroutine_contexts;
+    if (!context_list_head) {
+        // the head elem is initialized further in
+        // js_coroutine_init2 (), and used during
+        // gc stack walking in js_gc_walkstack2 ()
+        context_list_head =
+                js_calloc(1, sizeof(js_coroutine_context));
+        context_list_head->env = env;
+        env->coroutine_contexts = context_list_head;
+    }
+    ctx->next = context_list_head->next;
+    context_list_head->next = ctx;
+
     // we know that we are called by function wrapper ()
     // (nested within CoroutineFunction () in function.js).
     // we make a copy of the stack entries with parameters.
@@ -201,6 +197,7 @@ static js_val js_coroutine_init1 (
     js_link *stk_top    = env->stack_top;
     int      stk_size   = env->stack_size;
     js_try  *try_hndlr  = env->try_handler;
+    js_val   new_target = env->new_target;
 
     // create the coroutine, then continue in init3
     js_coroutine_init2(env, ctx);
@@ -209,6 +206,7 @@ static js_val js_coroutine_init1 (
     env->stack_top      = stk_top;
     env->stack_size     = stk_size;
     env->try_handler    = try_hndlr;
+    env->new_target     = new_target;
 
     // return context address as a plain number
     return js_make_number((double)(uintptr_t)ctx);
@@ -230,6 +228,7 @@ void js_coroutine_init3 (void *_ctx) {
     env->stack_top  = ctx->stack_tail;
     env->stack_size = ctx->stack_size;
 
+    env->new_target = js_undefined;
     env->try_handler = NULL;
     if (setjmp(*js_entertry(env)) == 0) {
         ctx->try_handler = env->try_handler;
@@ -237,6 +236,11 @@ void js_coroutine_init3 (void *_ctx) {
         const js_val func_val = ctx->value;
         const js_val this_val = ctx->value2;
         ctx->value = ctx->value2 = js_uninitialized;
+
+        // function value on the stack is wrapper ()
+        // declared in CoroutineFunction () in
+        // function.js, replace with correct function
+        ctx->stack_head->value = func_val;
 
         const js_c_func c_func =
             ((js_func *)js_get_pointer(func_val))->c_func;
@@ -267,6 +271,30 @@ void js_coroutine_init3 (void *_ctx) {
 
     // last switch out of terminating coroutine
     js_coroutine_switch2(ctx, &ctx->state, &ctx->value);
+}
+
+// ------------------------------------------------------------
+//
+// js_coroutine_kill
+//
+// ------------------------------------------------------------
+
+static bool js_coroutine_kill (js_coroutine_context *ctx) {
+
+    // stop the coroutine
+    if (!ctx->internal)
+        return false;
+    js_coroutine_kill2(ctx);
+    ctx->internal = 0;
+
+    // remove context from the linked list
+    js_coroutine_context *p_ctx =
+                    ctx->env->coroutine_contexts;
+    while (p_ctx->next != ctx)
+        p_ctx = p_ctx->next;
+    p_ctx->next = ctx->next;
+
+    return true;
 }
 
 // ------------------------------------------------------------
@@ -327,26 +355,16 @@ static js_val js_coroutine_resume (
         js_callthrow("TypeError_coroutine_already_resumed");
     }
 
-    // save environment of caller
-    js_link *stk_top    = env->stack_top;
-    int      stk_size   = env->stack_size;
-    js_try  *try_hndlr  = env->try_handler;
-
     // resume execution in the target context
     int state = should_throw | js_coroutine_is_resumed;
     js_coroutine_switch2(ctx, &state, &val);
     state &= ~js_coroutine_yield_star;
 
-    // restore environment of caller
-    env->stack_top      = stk_top;
-    env->stack_size     = stk_size;
-    env->try_handler    = try_hndlr;
-
     // if state is non-zero, coroutine has ended
     js_val done;
     if (state != 0) {
 
-        js_coroutine_kill2(ctx);
+        js_coroutine_kill(ctx);
 
         // throw exception, if coroutine requested
         if (state < 0)
@@ -399,7 +417,7 @@ static js_val js_coroutine (js_c_func_args) {
 
         // command is 'K' for Kill
         if (cmd.num == /* 0x4B */ (double)'K') {
-            ret = js_coroutine_kill2(ctx)
+            ret = js_coroutine_kill(ctx)
                 ? js_true : js_false;
 
         } else {
@@ -413,4 +431,4 @@ static js_val js_coroutine (js_c_func_args) {
 
 // ------------------------------------------------------------
 
-#endif // included_from_runtime
+#endif // included_from_platform

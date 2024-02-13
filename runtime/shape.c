@@ -25,8 +25,12 @@ struct js_shape {
     int num_values;
 };
 
-// if bit 31 is set in js_obj->max_values, object is not extensible
+// object is not extensible if
+// bit 31 is set in js_obj->max_values
 #define js_obj_not_extensible 0x80000000U
+// bits 30 and 29 are used for the gc mark
+#define js_obj_flags_mask (js_obj_not_extensible \
+    | js_gc_marked_bit | js_gc_notify_bit)
 
 // ------------------------------------------------------------
 //
@@ -54,15 +58,27 @@ static uint64_t js_shape_key (js_environ *env, js_val prop) {
                 objset_id *id = js_get_pointer(prop);
                 if (js_str_is_interned(id))
                     return (uint64_t)id;
+
+                if (id->flags & js_str_is_static) {
+                    // string is not interned but is
+                    // static/const, so can't modify
+                    // its flags, have to make a copy
+                    prop = js_str_search_or_intern(
+                                env, id->data, id->len);
+                    id = js_get_pointer(prop);
+                    return (uint64_t)id;
+                }
+
                 break; // skip toString()
             }
 
-            if (prim_type == js_prim_is_symbol)
-                return (uint64_t)js_get_pointer(prop);
-
-            if (prim_type == js_prim_is_bigint) {
-                prop = js_big_tostring(env, prop, 10);
-                break; // skip toString()
+            if (prim_type == js_prim_is_symbol) {
+                // a symbol value keeps its type
+                // and is not converted to a string
+                objset_id *id = js_get_pointer(prop);
+                if (!js_str_is_interned(id))
+                    js_str_flag_as_interned(id);
+                return (uint64_t)id;
             }
         }
 
@@ -73,7 +89,7 @@ static uint64_t js_shape_key (js_environ *env, js_val prop) {
     // intern the string
 
     objset_id *id = js_get_pointer(prop);
-    js_str_intern(&env->strings_set, id);
+    js_str_intern(id);
     return (uint64_t)id;
 }
 
@@ -87,6 +103,9 @@ static js_shape *js_shape_new (js_environ *env,
                                js_shape *old_shape,
                                int old_count,
                                int64_t new_key) {
+
+    if (old_count == 0xFFFFFF)
+        js_callthrow("RangeError_property_count");
 
     intmap *old_map = old_shape->props;
     intmap *new_map = js_check_alloc(intmap_create());
@@ -134,7 +153,8 @@ static js_shape *js_shape_new (js_environ *env,
 //
 // ------------------------------------------------------------
 
-static void js_shape_switch (js_obj *obj_ptr,
+static void js_shape_switch (js_environ *env,
+                             js_obj *obj_ptr,
                              int old_count,
                              js_val new_value,
                              js_shape *new_shape) {
@@ -144,8 +164,15 @@ static void js_shape_switch (js_obj *obj_ptr,
     // add a new value.  or equal, which means we need to
     // allocate extra room, we allocate more than one cell.
 
-    if (old_count >= (obj_ptr->max_values
-                            & (~js_obj_not_extensible))) {
+    const int max_values = obj_ptr->max_values;
+    js_val *old_vals = obj_ptr->values;
+
+    if (old_count < (max_values & ~js_obj_flags_mask)) {
+
+        // we have room for the new value without resizing
+        old_vals[old_count] = new_value;
+
+    } else {
 
         const int new_count = old_count + js_obj_grow_factor;
 
@@ -154,24 +181,32 @@ static void js_shape_switch (js_obj *obj_ptr,
 
         if (old_count) {
 
-            js_val *old_vals = obj_ptr->values;
-            memcpy(new_vals, old_vals, old_count * sizeof(js_val));
-
-            // free old values unless it is the initial set
-            // of values, allocated during js_newexobj ()
-            const int exotic_type = (uintptr_t)obj_ptr->proto & 7;
-            const int struct_size = js_obj_struct_size(exotic_type);
-            if (old_vals != (js_val *)((uintptr_t)obj_ptr + struct_size))
-                free(old_vals);
+            memcpy(new_vals, old_vals,
+                    old_count * sizeof(js_val));
         }
 
-        obj_ptr->max_values &= js_obj_not_extensible;
-        obj_ptr->max_values |= new_count;
-
+        new_vals[old_count] = new_value;
         obj_ptr->values = new_vals;
-    }
 
-    obj_ptr->values[old_count] = new_value;
+        // update count but keep top two flag bits.
+        // we use compare_and_swap because the flags
+        // are concurrently accessed by the gc thread.
+        // additionally, we need the memory barrier
+        // (side-effect of CAS) to make sure that our
+        // new 'values' array is potentially visible
+        // to the gc thread before the new 'shape' is
+        // set, which will have one more value slot.
+        js_compare_and_swap_32(&obj_ptr->max_values,
+                        js_obj_flags_mask, new_count);
+
+        // free old values unless it is the initial set
+        // of values, allocated during js_newexobj ()
+        const int exotic_type = (uintptr_t)obj_ptr->proto & 7;
+        const int struct_size = js_obj_struct_size(exotic_type);
+        if ((uint64_t)old_vals !=
+                        ((uintptr_t)obj_ptr + struct_size))
+            js_gc_free(env, old_vals);
+    }
 
     js_shape_set_in_obj(obj_ptr, new_shape);
 }

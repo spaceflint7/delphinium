@@ -9,8 +9,11 @@
 // ------------------------------------------------------------
 
 const _global = global;
+
 const _shadow = _global.shadow;
 delete _global.shadow;
+_shadow.global = _global;
+
 let _Symbol;
 
 // ------------------------------------------------------------
@@ -73,3 +76,7 @@ defineNotEnum(_global, 'globalThis', _global);
 #include "bigint.js"
 #include "mapset.js"
 #include "error.js"
+
+// all private values which must persist beyond this point,
+// must be referenced via _shadow, or they will be collected.
+gc.threshold = 12345; // also starts gc thread

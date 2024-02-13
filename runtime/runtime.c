@@ -55,11 +55,28 @@
 
 // ------------------------------------------------------------
 //
+// garbage collector flags
+//
+// ------------------------------------------------------------
+
+// bit 31 - reserved for js_obj_not_extensible
+// bit 30 - value was seen by the garbage collector.
+// bit 29 - js_setprop () notifying value reference.
+// used in js_obj->max_values for objects.
+// used in the length (i.e. first) word for bigints.
+// used in objset_id->flags for strings and symbols,
+// a 16-bit field, so right-shifted to bits
+#define js_gc_marked_bit 0x40000000U
+#define js_gc_notify_bit 0x20000000U
+
+// ------------------------------------------------------------
+//
 // environment type
 //
 // ------------------------------------------------------------
 
 typedef struct js_try js_try;
+typedef struct js_gc_env js_gc_env;
 
 struct js_environ {
 
@@ -98,14 +115,15 @@ struct js_environ {
 
     js_val big_zero;
 
-    int internal_flags;  // various jsf_xxx flags
-
     // end of the public section declared in runtime.h
     int last_public_field;
     int first_private_field;
 
+    int internal_flags;  // various jsf_xxx flags
+
     int next_unique_id;
     uint64_t math_random_state;
+    js_gc_env *gc;
 
     js_try *try_handler;
     js_val shadow_obj;
@@ -128,6 +146,7 @@ struct js_environ {
     int func_length;
     int func_name;
     int func_prototype;
+
     js_val func_hasinstance;
     js_val func_bound_prefix;
     js_val func_new_coroutine;
@@ -151,6 +170,9 @@ struct js_environ {
 
     // iterator
     js_val for_in_iterator;
+
+    // coroutines
+    struct js_coroutine_context *coroutine_contexts;
 };
 
 // ------------------------------------------------------------
@@ -158,6 +180,8 @@ struct js_environ {
 // other source files
 //
 // ------------------------------------------------------------
+
+#ifndef included_from_platform
 
 #include "decls.c"
 
@@ -184,8 +208,11 @@ struct js_environ {
 #include "iter.c"
 #include "math.c"
 #include "map.c"
+#include "gc.c"
 #include "init.c"
 #include "debug.c"
 
 #include "include/intmap.c"
 #include "include/objset.c"
+
+#endif // included_from_platform

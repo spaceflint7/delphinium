@@ -22,13 +22,18 @@ static js_environ *js_init (int64_t version_code) {
 
     env->internal_flags |= jsf_abort_if_non_strict;
 
+    //env->init_elapsed_time = js_elapsed_time();
+
     // initialize components
+    js_stack_init(env);
+    js_gc_init(env);
     js_str_init(env);
     js_shape_init(env);
     js_obj_init(env);
     js_descr_init(env);
     js_func_init(env);
-    js_stack_init(env);
+    js_gc_init_2(env);
+    js_stack_init_2(env);
     js_str_init_2(env);
     js_obj_init_2(env);
     js_num_init(env);

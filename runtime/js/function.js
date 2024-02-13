@@ -118,7 +118,7 @@ _shadow.arguments_symbol = arguments_symbol;
 
 const array_iterator = ([])[_Symbol.iterator];
 
-_shadow.js_arguments = function (input_array) {
+_shadow.js_arguments = function js_arguments (input_array) {
 
     const arguments_object = {};
 

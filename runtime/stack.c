@@ -38,6 +38,15 @@ static void js_stack_init (js_environ *env) {
     // stack size is 1 because we never count the tail
     env->stack_size = 1;
     env->stack_top = head;
+}
+
+// ------------------------------------------------------------
+//
+// js_stack_init_2
+//
+// ------------------------------------------------------------
+
+static void js_stack_init_2 (js_environ *env) {
 
     // expose the 'js_stack_trace' utility function
     js_newprop(env, env->shadow_obj,
@@ -68,6 +77,7 @@ void js_growstack (js_environ *env, js_link *stk, int needed) {
         js_link *stk_next = stk->next;
         js_link *old_link = stk_next;
         while (old_link) {
+            old_link->value = js_undefined;
             old_link->depth += extra_links;
             old_link = old_link->next;
         }
@@ -80,6 +90,7 @@ void js_growstack (js_environ *env, js_link *stk, int needed) {
         // attach the new links into the stack
         old_link = stk;
         while (extra_links --> 0) {
+            new_link->value = js_undefined;
             new_link->depth =
                         js_link_depth(old_link) + 1;
             new_link->prev = old_link;
@@ -138,9 +149,8 @@ int js_copystack (js_link **p_first, js_link **p_last) {
     // create the tail element
     new_link->value.raw = 0;
     new_link->next = NULL;
-    new_link->depth = next_depth;
     *p_last = new_link;
-    return next_depth;
+    return num_links;
 }
 
 // ------------------------------------------------------------
@@ -186,7 +196,7 @@ js_val js_arguments (js_environ *env,
 //
 // js_arguments2
 //
-// arguments utility for non-strict mode.  if args_val is
+// arguments utility for non-strict mode.
 //
 // ------------------------------------------------------------
 
@@ -241,6 +251,8 @@ void js_arguments2 (js_environ *env, js_val func_val,
         *js_ownprop(env, args_val,
                     env->str_callee, true) = func_val;
 
+        js_gc_notify(env, func_val);
+
         // next, we want to set the 'caller' property
         // on the function that was just entered, to the
         // function that called it.  we scan the stack
@@ -255,12 +267,14 @@ void js_arguments2 (js_environ *env, js_val func_val,
                 break;
             }
         }
+
+        js_gc_notify(env, func_val);
+        js_gc_notify(env, args_val);
     }
 
     args_descr->data_or_getter = args_val;
     func_descr->data_or_getter = func_val;
 }
-
 
 // ------------------------------------------------------------
 //

@@ -1,5 +1,20 @@
 
 // ------------------------------------------------------------
+
+#define js_make_primitive_bigint(p) \
+    js_make_primitive((p), js_prim_is_bigint)
+
+#define js_make_primitive_bigint_gc(p) \
+    js_gc_manage(env, \
+        js_make_primitive((p), js_prim_is_bigint))
+
+#define js_big_length_mask \
+    ~(js_gc_marked_bit | js_gc_notify_bit)
+
+#define js_big_length(p) \
+    ((*(p)) & js_big_length_mask)
+
+// ------------------------------------------------------------
 //
 // js_big_alloc
 //
@@ -68,7 +83,6 @@ static uint32_t *js_big_negate2 (
     // pass 0 in carry to just flip bits, a bitwise NOT.
     // pass 1 in carry to do two's complement negation.
 
-    //uint64_t carry = 1;
     uint32_t *newbig = js_big_alloc(env, len);
     uint32_t *ptr2 = newbig;
     *ptr2 = len;
@@ -95,10 +109,10 @@ static int js_big_compare (js_val left, js_val right) {
     //
 
     uint32_t *big1 = js_get_pointer(left);
-    uint32_t len1 = *big1;
+    uint32_t len1 = js_big_length(big1);
 
     uint32_t *big2 = js_get_pointer(right);
-    uint32_t len2 = *big2;
+    uint32_t len2 = js_big_length(big2);
 
     int32_t cmp = len1 - len2;
     while (cmp == 0 && len1 != 0) {
@@ -119,10 +133,10 @@ static js_val js_big_bitwise_op (
                             js_val left, js_val right) {
 
     uint32_t *big1 = js_get_pointer(left);
-    uint32_t len1 = *big1;
+    uint32_t  len1 = js_big_length(big1);
 
     uint32_t *big2 = js_get_pointer(right);
-    uint32_t len2 = *big2;
+    uint32_t  len2 = js_big_length(big2);
 
     if (len1 > len2) {
         uint32_t *swap_ptr = big1;
@@ -162,7 +176,7 @@ static js_val js_big_bitwise_op (
             *++ptr3 = (*++big2) ^ sign1;
     }
 
-    return js_make_primitive(big3, js_prim_is_bigint);
+    return js_make_primitive_bigint_gc(big3);
 }
 
 // ------------------------------------------------------------
@@ -352,8 +366,7 @@ static js_val js_big_shift (js_environ *env, js_val value,
 
     uint32_t *shift_ptr = js_get_pointer(shift);
     int32_t shift_count;
-    //if (js_big_trimmed_len(shift_ptr) == 1)
-    if (*shift_ptr == 1)
+    if (js_big_length(shift_ptr) == 1)
         shift_count = *(int32_t *)(shift_ptr + 1);
     else {
         // get sign from highest word (bit 31)
@@ -370,8 +383,7 @@ static js_val js_big_shift (js_environ *env, js_val value,
     //
 
     uint32_t *input_ptr = js_get_pointer(value);
-    //uint32_t input_len = js_big_trimmed_len(input_ptr);
-    uint32_t input_len = *input_ptr;
+    uint32_t input_len = js_big_length(input_ptr);
     uint32_t *output;
 
     shift_count *= shift_dir;
@@ -407,7 +419,7 @@ static js_val js_big_shift (js_environ *env, js_val value,
                                     input_ptr, input_len);
     }
 
-    return js_make_primitive(output, js_prim_is_bigint);
+    return js_make_primitive_bigint_gc(output);
 }
 
 // ------------------------------------------------------------
@@ -425,10 +437,10 @@ static js_val js_big_add_sub (js_environ *env,
     // words from the input bigint into the new bigint.
 
     uint32_t *big1 = js_get_pointer(left);
-    uint32_t len1 = *big1;
+    uint32_t len1 = js_big_length(big1);
 
     uint32_t *big2 = js_get_pointer(right);
-    uint32_t len2 = *big2;
+    uint32_t len2 = js_big_length(big2);
 
     // allocate an extra word, only if bigs are same length
     uint32_t *big3, *ptr3;
@@ -504,7 +516,7 @@ static js_val js_big_add_sub (js_environ *env,
     }
 
     js_big_trim(big3, ptr3);
-    return js_make_primitive(big3, js_prim_is_bigint);
+    return js_make_primitive_bigint_gc(big3);
 }
 
 // ------------------------------------------------------------
@@ -530,14 +542,13 @@ static js_val js_big_multiply (js_environ *env,
     //   69104 <-- result cannot be more than 4+2 = 6 words
     //
     // this naive algorithm is not guaranteed to work with
-    // negative inputs, so if either input is negative, we
-    // multiply it by -1.  if only one input was negative,
-    // we negate the result.
+    // negative inputs, so we negate such inputs, and also
+    // negate the result, if only one input was negative.
 
     bool negate_result = false;
 
     uint32_t *big1 = js_get_pointer(left);
-    uint32_t len1 = *big1;
+    uint32_t len1 = js_big_length(big1);
     if (((int32_t)big1[len1]) >> 31) {
         negate_result = true;
         // allocates a new bigint with same length
@@ -545,7 +556,7 @@ static js_val js_big_multiply (js_environ *env,
     }
 
     uint32_t *big2 = js_get_pointer(right);
-    uint32_t len2 = *big2;
+    uint32_t len2 = js_big_length(big2);
     if (((int32_t)big2[len2]) >> 31) {
         negate_result = !negate_result;
         // allocates a new bigint with same length
@@ -590,7 +601,7 @@ static js_val js_big_multiply (js_environ *env,
         js_big_negate1(big3, big3end);
 
     js_big_trim(big3, big3end);
-    return js_make_primitive(big3, js_prim_is_bigint);
+    return js_make_primitive_bigint_gc(big3);
 }
 
 // ------------------------------------------------------------
@@ -632,7 +643,7 @@ static js_val js_big_divide_by_integer (
     //
 
     uint32_t *input_big = js_get_pointer(big_dividend);
-    uint32_t len = *input_big;
+    uint32_t len = js_big_length(input_big);
 
     uint32_t *output_big = js_big_alloc(env, len);
     uint32_t *output_end = output_big + 1 + len;
@@ -673,18 +684,13 @@ static js_val js_big_divide_by_integer (
         int64_t quot = dividend / divisor;
            remainder = dividend % divisor;
 
-        //if (quot >> 32) { __builtin_trap(); }
         *--output_ptr = (uint32_t)quot;
-
-        //if (output_ptr <= output_big) {__builtin_trap(); }
     }
-
-    //if (output_ptr != output_big + 1) { __builtin_trap(); }
 
     *out_remainder = remainder;
 
     js_big_trim(output_big, output_end);
-    return js_make_primitive(output_big, js_prim_is_bigint);
+    return js_make_primitive_bigint_gc(output_big);
 }
 
 // ------------------------------------------------------------
@@ -806,7 +812,7 @@ static js_val js_big_divide_with_remainder (
     js_val big_dividend_0 = big_dividend;
 
     uint32_t *ptr_dividend = js_get_pointer(big_dividend);
-    uint32_t len_dividend = *ptr_dividend;
+    uint32_t len_dividend = js_big_length(ptr_dividend);
 
     int32_t sign_dividend =
             ((int32_t)ptr_dividend[len_dividend]) >> 31;
@@ -816,8 +822,8 @@ static js_val js_big_divide_with_remainder (
         // allocates a new bigint with same length
         ptr_dividend = js_big_negate2(env, 1ULL,
                             ptr_dividend, len_dividend);
-        big_dividend = js_make_primitive(
-                        ptr_dividend, js_prim_is_bigint);
+        big_dividend =
+            js_make_primitive_bigint_gc(ptr_dividend);
     }
 
     // if divisor is just a single word (or two words,
@@ -825,7 +831,7 @@ static js_val js_big_divide_with_remainder (
     // by integer.  we also catch division by zero here.
 
     uint32_t *ptr_divisor = js_get_pointer(big_divisor);
-    uint32_t len_divisor = *ptr_divisor;
+    uint32_t  len_divisor = js_big_length(ptr_divisor);
 
     if (len_divisor == 1
     || (len_divisor == 2 && ptr_divisor[2] == 0)) {
@@ -847,7 +853,8 @@ static js_val js_big_divide_with_remainder (
         if (sign_result) {
 
             uint32_t *ptr_quot = js_get_pointer(quotient);
-            uint32_t *end_quot = ptr_quot + *ptr_quot + 1;
+            uint32_t  len_quot = js_big_length(ptr_quot);
+            uint32_t *end_quot = ptr_quot + len_quot + 1;
             js_big_negate1(ptr_quot, end_quot);
         }
 
@@ -862,8 +869,7 @@ static js_val js_big_divide_with_remainder (
             ptr[0] = 1;
             ptr[1] = (int32_t)rem32 * sign_dividend;
 
-            *remainder =
-                js_make_primitive(ptr, js_prim_is_bigint);
+            *remainder = js_make_primitive_bigint_gc(ptr);
         }
 
         return quotient;
@@ -880,8 +886,8 @@ static js_val js_big_divide_with_remainder (
         // allocates a new bigint with same length
         ptr_divisor = js_big_negate2(env, 1ULL,
                             ptr_divisor, len_divisor);
-        big_divisor = js_make_primitive(
-                        ptr_divisor, js_prim_is_bigint);
+        big_divisor =
+            js_make_primitive_bigint_gc(ptr_divisor);
     }
 
     //
@@ -940,6 +946,8 @@ static js_val js_big_divide_with_remainder (
         ptr_divisor = js_big_shift_left(
             env, shift_count, ptr_divisor, len_divisor);
         len_divisor = *ptr_divisor;
+        big_divisor =
+                js_make_primitive_bigint_gc(ptr_divisor);
 
         // remove an extra zero word for sign, which may
         // have been added by the shift operation, because
@@ -953,6 +961,8 @@ static js_val js_big_divide_with_remainder (
         ptr_dividend = js_big_shift_left(
             env, shift_count, ptr_dividend, len_dividend);
         len_dividend = *ptr_dividend;
+        big_dividend =
+                js_make_primitive_bigint_gc(ptr_dividend);
     }
 
     //
@@ -974,6 +984,8 @@ static js_val js_big_divide_with_remainder (
         *ptr++ = 0;
 
         ptr_dividend = new_dividend;
+        big_dividend =
+                js_make_primitive_bigint_gc(ptr_dividend);
     }
 
     //
@@ -985,6 +997,9 @@ static js_val js_big_divide_with_remainder (
     uint32_t *ptr_quotient =
                         js_big_alloc(env, len_quotient);
 
+    for (int i = 0; i <= len_quotient; i++)
+        ((volatile uint32_t *)ptr_quotient)[i] = 0;
+
     js_big_divide_long(ptr_dividend, len_dividend,
                        ptr_divisor,  len_divisor,
                        ptr_quotient, len_quotient);
@@ -995,14 +1010,10 @@ static js_val js_big_divide_with_remainder (
         // sign of the remainder.  if the dividend was
         // negative, then negate the remainder.
 
-        if (shift_count) {
-
-            ptr_dividend = js_big_shift_right(
-                            env, shift_count,
-                            ptr_dividend, len_dividend);
-
-            len_dividend = *ptr_dividend;
-        }
+        ptr_dividend = js_big_shift_right(
+                        env, shift_count,
+                        ptr_dividend, len_dividend);
+        len_dividend = *ptr_dividend;
 
         uint32_t *end_dividend =
                     ptr_dividend + 1 + len_dividend;
@@ -1012,8 +1023,8 @@ static js_val js_big_divide_with_remainder (
 
         js_big_trim(ptr_dividend, end_dividend);
 
-        *remainder = js_make_primitive(
-                        ptr_dividend, js_prim_is_bigint);
+        *remainder = big_dividend =
+                js_make_primitive_bigint_gc(ptr_dividend);
     }
 
     // if the sign of the divisor and the sign of the
@@ -1026,8 +1037,8 @@ static js_val js_big_divide_with_remainder (
         js_big_negate1(ptr_quotient, end_quotient);
 
     js_big_trim(ptr_quotient, end_quotient);
-    return js_make_primitive(
-                ptr_quotient, js_prim_is_bigint);
+
+    return js_make_primitive_bigint_gc(ptr_quotient);
 }
 
 // ------------------------------------------------------------
@@ -1040,7 +1051,7 @@ static js_val js_big_power (js_environ *env,
                             js_val base, js_val exponent) {
 
     uint32_t *big_exp = js_get_pointer(exponent);
-    uint32_t len_exp = *big_exp;
+    uint32_t len_exp = js_big_length(big_exp);
 
     if (((int32_t)big_exp[len_exp]) >> 31) {
         // negative exponent is not permitted
@@ -1051,8 +1062,7 @@ static js_val js_big_power (js_environ *env,
                     js_malloc(sizeof(uint32_t[1 + 1]));
     temp_ptr[0] = 1;
     temp_ptr[1] = 1;
-    js_val temp = js_make_primitive(temp_ptr,
-                                    js_prim_is_bigint);
+    js_val temp = js_make_primitive_bigint_gc(temp_ptr);
 
     // if exponent is zero, do nothing, return 1
     if (len_exp == 1 && big_exp[1] == 0)
@@ -1071,6 +1081,7 @@ static js_val js_big_power (js_environ *env,
         big_exp = js_big_shift_right(
                         env, 1, big_exp, len_exp);
         len_exp = *big_exp;
+        exponent = js_make_primitive_bigint_gc(big_exp);
     }
 
     return temp;

@@ -370,12 +370,12 @@ write_string (c_name, str_text, outfunc_output, infunc_output) {
 
     const c_init = `${c_name}_init`;
     outfunc_output.push(
-        `static wchar_t *${c_init}=(wchar_t[]){`
-    +   /* flags and length */ `0,0,0,${chars_text}};` );
+        `static const wchar_t *${c_init}=(const wchar_t[]){`
+    +   `js_newstr_prefix(${num_chars},${+intern_flag}),`
+    +   chars_text + '};' );
 
     infunc_output.push(
-        `${c_name}=js_newstr(env,${intern_flag},`
-    +   `${num_chars},${c_init});`);
+        `${c_name}=js_newstr(env,${c_init});`);
 }
 
 // ------------------------------------------------------------

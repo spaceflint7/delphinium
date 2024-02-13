@@ -1,5 +1,18 @@
 
+// ------------------------------------------------------------
+//
+// functions
+//
+// ------------------------------------------------------------
+
 #define jsf_abort_if_non_strict 1
+
+struct js_closure_var {
+
+    js_val value;
+    js_val owner_or_ref_count;
+    js_val *next;
+};
 
 // ------------------------------------------------------------
 //
@@ -13,8 +26,8 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
                    js_val name, const char *where,
                    int arity, int closures, ...) {
 
-    js_func *func =
-            js_newexobj(env->func_proto, env->func_shape1);
+    js_func *func = js_newexobj(env,
+                        env->func_proto, env->func_shape1);
     func->c_func = c_func;
 
     // source location, a diagnostic aid for stack traces,
@@ -56,12 +69,22 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
         va_list args;
         va_start(args, closures);
         js_val **closure_ptr = &func->closure_array[closures];
-        while (closures-- > 0)
-            *closure_ptr++ = va_arg(args, js_val *);
+        while (closures-- > 0) {
+            struct js_closure_var *closure_var =
+                        va_arg(args, struct js_closure_var *);
+
+            /*if (js_is_object(closure_var->owner_or_ref_count)) {
+                xxx unlink closure from owner temps
+            }*/
+
+            *closure_ptr++ = &closure_var->value;
+        }
         va_end(args);
 
     } else
         func->closure_array = NULL;
+
+    func->closure_temps = NULL;
 
     // set up the two initial properties in a function object:
     js_val *values = func->super.values;
@@ -94,7 +117,10 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
     // in statement_writer.js
     //
 
-    js_val ret_func = js_make_object(func);
+    values[env->func_prototype] = js_deleted;
+
+    js_val ret_func =
+            js_gc_manage(env, js_make_object(func));
 
     if (!(func->flags & js_strict_mode)) {
 
@@ -121,22 +147,31 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
     //          enumerable: false, configurable: true }
     //
 
-    if (func->flags & js_not_constructor) {
+    if (!(func->flags & js_not_constructor)) {
 
-        values[env->func_prototype] = js_deleted;
+        js_obj *new_obj = js_newexobj(
+                env, env->obj_proto, env->func_shape2);
 
-    } else {
+        new_obj->values[0] = js_make_descriptor(
+            js_newdescr(js_descr_value | js_descr_write
+                      | js_descr_config, ret_func, zero));
 
         js_val new_proto =
+            js_gc_manage(env, js_make_object(new_obj));
+
+        /*js_val new_proto =
             js_newobj(env, env->func_shape2,
                 js_make_descriptor(js_newdescr(
                     js_descr_value | js_descr_write
-                  | js_descr_config, ret_func, zero)));
+                  | js_descr_config, ret_func, zero)));*/
 
         values[env->func_prototype] =
                 js_make_descriptor(js_newdescr(
                     js_descr_value | js_descr_write,
                     new_proto, zero));
+
+        // notify due to property set, see js_setprop ()
+        js_gc_notify(env, new_proto);
     }
 
     return ret_func;
@@ -290,7 +325,8 @@ js_val js_callnew (js_environ *env, js_val func_val,
     } else
         shape = env->shape_empty;
 
-    js_obj *this_obj = js_newexobj(env->obj_proto, shape);
+    js_obj *this_obj = js_newexobj(
+                        env, env->obj_proto, shape);
     for (int i = 0; i < shape->num_values; i++)
         this_obj->values[i] = js_deleted;
 
@@ -313,7 +349,8 @@ js_val js_callnew (js_environ *env, js_val func_val,
     // bound functions generally ignore a passed 'this'
     // value, in favor of a pre-set 'this' value.  but
     // this should not happen when used as constructor.
-    js_val this_val = js_make_object(this_obj);
+    js_val this_val =
+        js_gc_manage(env, js_make_object(this_obj));
     if (func1 != func2) {
         // indicate to use the passed 'this' value
         func1->closure_array[1] = (void *)-1;
@@ -338,8 +375,6 @@ js_val js_callnew (js_environ *env, js_val func_val,
 
 js_val js_callfunc (js_c_func_args) {
 
-    stk_args->value.raw = func_val.raw | 2; // stack frame
-
     js_val func_name_hint = env->func_name_hint;
     env->func_name_hint = js_undefined;
 
@@ -347,6 +382,8 @@ js_val js_callfunc (js_c_func_args) {
 
         js_obj *func_obj = (js_obj *)js_get_pointer(func_val);
         if (js_obj_is_exotic(func_obj, js_obj_is_function)) {
+
+            stk_args->value.raw = func_val.raw | 2; // stack frame
 
             return ((js_func *)func_obj)->c_func(
                         env, func_val, this_val, stk_args);
@@ -374,12 +411,29 @@ js_val js_callfunc (js_c_func_args) {
 // accessed by a nested function, and therefore must remain
 // 'live' even when its own declaring function has returned.
 //
+// at some later point, the closure variable is assigned to
+// a function via js_newfunc (), see there.  but until then,
+// the closure value must remain reachable, because of gc.
+// the array in js_func->closure_temps is used for this.
+//
 // ------------------------------------------------------------
 
-js_val *js_newclosure (js_environ *env, js_val *old_val) {
+js_val *js_newclosure (js_val func_val, js_val *old_val) {
 
-    js_val *val_ptr = js_malloc(sizeof(js_val));
+    // allocate room to hold the new closure variable
+    struct js_closure_var *new_closure =
+                js_malloc(sizeof(struct js_closure_var));
+    js_val *val_ptr = &new_closure->value;
     *val_ptr = old_val ? *old_val : js_uninitialized;
+
+    // an owner function reference tells js_newfunc ()
+    // this closure var can be found in 'closure_temps'
+    new_closure->owner_or_ref_count = func_val;
+    // insert the new closure var in 'closure_temps'
+    js_func *func_obj = js_get_pointer(func_val);
+    new_closure->next = func_obj->closure_temps;
+    func_obj->closure_temps = val_ptr;
+
     return val_ptr;
 }
 
@@ -724,9 +778,13 @@ static js_val js_hasinstance (js_c_func_args) {
 
 static js_val js_flag_as_not_constructor (js_c_func_args) {
 
-    if (js_is_object(this_val)) {
+    js_link *arg_ptr = stk_args->next;
+    js_val arg_val = arg_ptr != js_stk_top
+                   ? arg_ptr->value : js_undefined;
 
-        js_obj *obj_ptr = (js_obj *)js_get_pointer(this_val);
+    if (js_is_object(arg_val)) {
+
+        js_obj *obj_ptr = (js_obj *)js_get_pointer(arg_val);
         if (js_obj_is_exotic(obj_ptr, js_obj_is_function)) {
 
             ((js_func *)obj_ptr)->flags |= js_not_constructor;
@@ -805,13 +863,13 @@ static void js_func_init (js_environ *env) {
 
     // expose Function.prototype.call as js_proto_call
     obj = js_newfunc(env, js_proto_call, js_str_c(env, "call"),
-                        NULL, js_strict_mode, 1);
+                NULL, js_strict_mode | 1, /* closures */ 0);
     js_newprop(env, env->shadow_obj,
         js_str_c(env, "js_proto_call")) = obj;
 
     // expose Function.prototype.bind as js_proto_bind
     obj = js_newfunc(env, js_proto_bind, js_str_c(env, "bind"),
-                        NULL, js_strict_mode, 1);
+                NULL, js_strict_mode | 1, /* closures */ 0);
     js_newprop(env, env->shadow_obj,
         js_str_c(env, "js_proto_bind")) = obj;
 

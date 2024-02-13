@@ -290,8 +290,8 @@ js_val js_delprop (
 
             if (flags & js_descr_config) {
                 // ok to delete non-configurable element
-                free(descr);
                 js_arr_set(env, obj, prop_idx, js_deleted);
+                js_gc_free(env, descr);
                 return js_true;
             }
 
@@ -349,8 +349,8 @@ js_val js_delprop (
 
             if (flags & js_descr_config) {
                 // ok to delete non-configurable element
-                free(descr);
                 obj_ptr->values[~idx_or_ptr] = js_deleted;
+                js_gc_free(env, descr);
                 return js_true;
             }
 

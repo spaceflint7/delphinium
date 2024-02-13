@@ -340,6 +340,8 @@ static void js_defineProperty_parse (
         if (has_val) {
             val1 = js_getprop(env, descr_val, env->str_value,
                               &dummy_shape_cache);
+            if (js_is_object_or_primitive(val1))
+                js_gc_notify(env, val1);
         }
 
         if (has_w) {
@@ -375,9 +377,10 @@ static void js_defineProperty_parse (
 
             if (js_is_object(val1) &&
                     js_obj_is_exotic(js_get_pointer(val1),
-                                        js_obj_is_function))
+                                     js_obj_is_function)) {
                 flags |= js_descr_getter;
-            else
+                js_gc_notify(env, val1);
+            } else
                 err = true;
         } else
             flags &= ~js_descr_getter;
@@ -391,9 +394,10 @@ static void js_defineProperty_parse (
 
             if (js_is_object(val2) &&
                     js_obj_is_exotic(js_get_pointer(val2),
-                                     js_obj_is_function))
+                                     js_obj_is_function)) {
                 flags |= js_descr_setter;
-            else
+                js_gc_notify(env, val2);
+            } else
                 err = true;
         } else
             flags &= ~js_descr_setter;

@@ -7,7 +7,8 @@
 
 js_val js_newarr (js_environ *env, int num_values, ...) {
 
-    js_arr *arr = js_newexobj(env->arr_proto, env->arr_shape);
+    js_arr *arr = js_newexobj(
+                    env, env->arr_proto, env->arr_shape);
 
     if (num_values > 0) {
 
@@ -36,7 +37,7 @@ js_val js_newarr (js_environ *env, int num_values, ...) {
                         js_make_number(arr->length),
                         js_make_number(0.0)));
 
-    return js_make_object(arr);
+    return js_gc_manage(env, js_make_object(arr));
 }
 
 // ------------------------------------------------------------
@@ -67,9 +68,11 @@ js_val js_restarr_stk (js_environ *env, js_link *stk_ptr) {
             values[index++] = arg_ptr->value;
 
         js_arr *arr = (js_arr *)js_get_pointer(arr_val);
-        arr->capacity = arr->length = count;
-        arr->length_descr[0].num = count;
         arr->values = values;
+        arr->length = count;
+        js_compare_and_swap_32( // see js_arr_set ()
+                    &arr->capacity, 0U, count);
+        arr->length_descr[0].num = count;
     }
 
     return arr_val;
@@ -86,7 +89,7 @@ js_val js_restarr_iter (js_environ *env, js_val *iterator) {
     js_val arr_val = js_newarr(env, 0);
     uint32_t prop_idx = 0;
     while (iterator[0].raw) {
-        js_arr_set (env, arr_val, ++prop_idx, iterator[2]);
+        js_arr_set(env, arr_val, ++prop_idx, iterator[2]);
         js_nextiter1(env, iterator);
     }
     return arr_val;
@@ -169,8 +172,7 @@ static void js_arr_set (js_environ *env, js_val obj,
             new_capacity = js_max_index + 1;
 
         if (new_capacity < prop_idx) {
-            js_callshadow(env, "RangeError_array_length",
-                          js_undefined);
+            js_callthrow("RangeError_array_length");
             return;
         }
 
@@ -179,10 +181,17 @@ static void js_arr_set (js_environ *env, js_val obj,
         js_val *new_values =
                     js_malloc(new_capacity * sizeof(js_val));
         memcpy(new_values, values, capacity * sizeof(js_val));
-        free(values);
 
-        arr->values = values = new_values;
-        arr->capacity = new_capacity;
+        // barrier to make sure the concurrent gc thread
+        // can never see a combination of newer capacity
+        // (which would be larger) but older 'values'
+        arr->values = new_values;
+        js_compare_and_swap_32(
+                    &arr->capacity, 0U, new_capacity);
+
+        // free old values
+        js_gc_free(env, values);
+        values = new_values;
 
         // clear elements from old length to new length
         js_val *ptr = &values[capacity];

@@ -41,7 +41,7 @@ js_val js_leavetry (js_environ *env) {
     js_try *try = env->try_handler;
     js_val throw_val = try->throw_val;
     env->try_handler = try->parent_try;
-    free(try);
+    js_gc_free(env, try);
     return throw_val;
 }
 

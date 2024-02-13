@@ -160,7 +160,7 @@ function write_param_locals (func_stmt) {
             // allocate a closure variable,
             // and assign the actual argument value
             output.push(`js_val *${node.c_name}=`
-                      + `js_newclosure(env,&${c_name});`);
+                      + `js_newclosure(func_val,&${c_name});`);
         } else if (!is_identifier) {
 
             if (!process_pattern(node, c_name, c_names, output))
@@ -446,7 +446,7 @@ exports.function_expression = function (expr) {
         //      let var_in_parent_scope = function internal_name ()
         // in this case, we allocate a closure variable to hold
         // func_val, because func_val is probably on the stack.
-        return `js_newclosure(env,&func_val)`;
+        return `js_newclosure(func_val,&func_val)`;
     }
 
     function import_local_from_outer_func (decl_node, expr_node, func_node) {

@@ -463,6 +463,9 @@ function write_call_arguments (expr) {
         text += `js_stk_top->value=${arg_text}${stk_next}`;
     }
 
+    // zero-init the slot reserved for callee function
+    text += 'js_stk_top->value.raw=0,';
+
     return text;
 }
 

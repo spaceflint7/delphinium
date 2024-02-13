@@ -37,8 +37,9 @@ typedef union js_val { double num; uint64_t raw; } js_val;
 #define js_nan                  ((js_val){ .raw = js_exponent_mask | js_quiet_nan_bit })
 
 // utility macros to handle NaN-boxed pointers
+#define js_pointer_mask         0xFFFFFFFFFFF8ULL
 #define js_is_pointer(ty,v)     (!(~((v).raw) & (js_dynamic_type_mask | (ty))))
-#define js_get_pointer(v)       ((void *)((v).raw & 0xFFFFFFFFFFF8))
+#define js_get_pointer(v)       ((void *)((v).raw & js_pointer_mask))
 #define js_make_pointer(ty,ptr) ((js_val){ .raw = js_dynamic_type_mask | (ty) | (uint64_t)(uintptr_t)(ptr) })
 
 // pointer to object when NaN-boxing bits and js_object_bit are set
@@ -56,6 +57,9 @@ typedef union js_val { double num; uint64_t raw; } js_val;
 #define js_prim_is_string       0
 #define js_prim_is_symbol       1
 #define js_prim_is_bigint       2
+
+// test if js_dynamic_type_mask and either js_object_bit or js_primitive_bit
+#define js_is_object_or_primitive(v) (((((v).raw >> 48) & 0x7FFF) - 0x7FFD) <= 1)
 
 // special value when neither js_object_bit nor js_primitive_bit is set.
 #define js_deleted              ((js_val){ .raw = js_dynamic_type_mask | 0x0002 })
@@ -148,12 +152,21 @@ typedef struct js_link js_link;
 // string
 //
 
-// define a string from a non-const memory layout declared as:
-// static wchar_t [] { 0, 0, 0, char, char, ... }
+#define js_str_is_string   1
+#define js_str_is_symbol   2
+#define js_str_in_objset   4
+#define js_str_is_static   8
+
+// define a string from a const memory layout declared as:
+// static wchar_t [] { len, len, flg, char, char, ... }
 // this precisely matches the memory layout of objset_id.
 // the runtime assumes ownership of the passed string.
-js_val js_newstr (js_environ *env, bool intern,
-                    int len, wchar_t *ptr);
+js_val js_newstr (js_environ *env, const wchar_t *ptr);
+
+#define js_newstr_prefix(len,intern) \
+        (wchar_t)(len << 1), (wchar_t)(len >> 15), \
+        (js_str_is_string | js_str_is_static | \
+            ((intern) * js_str_in_objset))
 
 //
 // object
@@ -290,6 +303,7 @@ struct js_func {
     js_c_func c_func;
     int64_t *shape_cache;
     js_val **closure_array;
+    js_val *closure_temps;
     union {
         js_shape *new_shape;
         js_link *with_scope;
@@ -308,7 +322,7 @@ js_val js_callnew (js_environ *env, js_val func_val,
 
 js_val js_callfunc (js_c_func_args);
 
-js_val *js_newclosure (js_environ *env, js_val *old_val);
+js_val *js_newclosure (js_val func_val, js_val *old_val);
 
 js_val *js_closureval (js_environ *env,
                        js_val func_val, int closure_index);
@@ -465,8 +479,6 @@ struct js_environ {
 
     js_val big_zero;
 
-    int internal_flags;  // flags for internal use
-
     // end of the public section declared in runtime.h
     int last_public_field;
 };
@@ -509,9 +521,10 @@ __forceinline double js_sign (double x) {
 //
 
 #if defined(__GNUC__)
-#define likely(x) (__builtin_expect((x),1))
-#define unlikely(x) (__builtin_expect((x),0))
-#else
+#define likely(x) (__builtin_expect(!!(x),1))
+#define unlikely(x) (__builtin_expect(!!(x),0))
+
+#else //!__GNUC__
 #define likely(x) (x)
 #define unlikely(x) (x)
 #endif
