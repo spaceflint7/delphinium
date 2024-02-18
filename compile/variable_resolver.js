@@ -92,6 +92,8 @@ function process_parameter (node) {
 
         if (node.type === 'RestElement')
             node = node.argument;
+        else if (node.type === 'AssignmentPattern')
+            node = node.left;
         let node2list;
         if (node.type === 'Identifier')
             node2list = [ node ];
@@ -140,7 +142,19 @@ function process_declarations (node) {
 
     if (node.type === 'FunctionDeclaration') {
 
-        add_local_if_declared_var(node);
+        let do_strict_mode_scoping = false;
+        const declaration_is_at_function_scope =
+            node.parent_node.parent_node.is_func_node;
+        if (!declaration_is_at_function_scope) {
+            // in strict mode, function declarations are scoped
+            // to a block;  in non-strict mode, to the function
+            const func_node = utils.get_parent_func_node(node);
+            do_strict_mode_scoping = func_node.strict_mode;
+        }
+        if (do_strict_mode_scoping)
+            add_local_if_first_in_scope(node);
+        else
+            add_local_if_declared_var(node);
 
     } else if (node.type === 'ClassDeclaration') {
 
@@ -169,10 +183,17 @@ function process_declarations (node) {
 
         node.scope = new Map();
 
-    } else if (node.type === 'MetaProperty'
-            || node.type === 'ArrowFunctionExpression') {
+    } else if (node.type === 'MetaProperty') {
 
-        create_meta_property(node);
+        create_meta_property(node, true);
+
+    } else if (node.type === 'ThisExpression') {
+
+        create_meta_property_for_parent_this(node);
+
+    } else if (node.type === 'ArrowFunctionExpression') {
+
+        create_meta_properties_in_arrow_function(node);
 
     } else if (node.type === 'CatchClause') {
 
@@ -266,15 +287,32 @@ function add_local_if_declared_var (node) {
                 }
                 // also allow a 'var' declaration to override
                 // any function declaration in the same scope,
-                // and also to override any parameter
+                // but only at the function-level scope
                 if (other_node.type !== 'FunctionDeclaration')
                     duplicate_identifier_error(node, other_node);
 
                 else if (node.kind === 'var') {
+                    const declaration_is_at_function_scope =
+                        other_node.parent_node
+                                        .parent_node.is_func_node;
+                    if (!declaration_is_at_function_scope) {
+                        duplicate_identifier_error(
+                                                node, other_node);
+                    }
                     // a local with this name already exists
                     // as a result of a function declaration
                     node.unique_id = other_node.unique_id;
                     return;
+
+                } else if (node.type === 'FunctionDeclaration') {
+                    // in non-strict mode, a function declaration
+                    // in a nested block shares the same local as
+                    // the declaration at the function-level scope
+                    const func_node = utils.get_parent_func_node(node);
+                    if (!func_node.strict_mode) {
+                        node.unique_id = other_node.unique_id;
+                        return;
+                    }
                 }
             }
         }
@@ -403,18 +441,12 @@ function missing_identifier_error (node) {
 
 // ------------------------------------------------------------
 
-function create_meta_property (node) {
+function create_meta_property (node, is_real_ref, func_node) {
 
-    let is_real_ref;
-    if (node.type === 'ArrowFunctionExpression') {
-        // a nested function may reference 'new.target'
-        node = {
-            meta:     { type: 'Identifier', name: 'new' },
-            property: { type: 'Identifier', name: 'target' },
-            parent_node: node,
-        };
-    } else
-        is_real_ref = true;
+    if (!func_node) {
+        // if called from process_declarations (),
+        func_node = utils.get_parent_func_node(node);
+    }
 
     let meta_node = node.meta;
     let prop_node = node.property;
@@ -433,7 +465,6 @@ function create_meta_property (node) {
 
     // if the meta.property name is already in scope,
     // then we already did the work once, and we're done
-    const func_node = utils.get_parent_func_node(node);
     let var_node = func_node.scope.get(var_name);
     if (var_node) {
         if (is_real_ref)
@@ -490,6 +521,45 @@ function create_meta_property (node) {
     // the function body, and the topmost local scope
     func_node.body.body.unshift(meta_node);
     add_one_or_more_locals(meta_node, true);
+}
+
+// ------------------------------------------------------------
+
+function create_meta_property_for_parent_this (node) {
+
+    // convert a ThisExpression node which occurs
+    // within an arrow function to our meta property
+    const func_node = utils.get_parent_func_node(node);
+    if (func_node.type !== 'ArrowFunctionExpression')
+        return;
+
+    node.type     = 'MetaProperty';
+    node.meta     = { type: 'Identifier', name: 'parent' };
+    node.property = { type: 'Identifier', name: 'this' };
+
+    create_meta_property(node, true, func_node);
+}
+
+// ------------------------------------------------------------
+
+function create_meta_properties_in_arrow_function (node) {
+
+    // create meta property nodes in advance.
+    // the property flag 'is_meta_property_ref'
+    // becomes set if a particular meta property
+    // actually gets referenced by the function.
+
+    const func_node = utils.get_parent_func_node(node);
+
+    create_meta_property({
+        meta:     { type: 'Identifier', name: 'new' },
+        property: { type: 'Identifier', name: 'target' },
+        parent_node: node }, false, func_node);
+
+    create_meta_property({
+        meta:     { type: 'Identifier', name: 'parent' },
+        property: { type: 'Identifier', name: 'this' },
+        parent_node: node }, false, func_node);
 }
 
 // ------------------------------------------------------------
@@ -662,6 +732,11 @@ function process_references (node) {
                 check_uninitialized_reference(node, other_node);
             }
 
+            if (other_node.is_parameter) {
+
+                check_uninitialized_parameter(node, other_node);
+            }
+
             if (other_node.is_arguments_object)
                 other_node.is_arguments_object_ref = true;
 
@@ -753,6 +828,39 @@ function check_uninitialized_reference (ref_node, decl_node) {
         throw [ ref_node,
                 'variable referenced before initialization' ];
     }
+}
+
+// ------------------------------------------------------------
+
+function check_uninitialized_parameter (ref_node, decl_node) {
+
+    // check if a default initializer for a parameter
+    // references an earlier parameter which has not
+    // yet been initialized, e.g. function f (p = p + 1)
+
+    const func_node = utils.get_parent_func_node(decl_node);
+    const ref_node_0 = ref_node;
+
+    for (;;) {
+        const parent_node = ref_node.parent_node;
+        if (parent_node.type === 'BlockStatement') {
+            // if hit a block statement then we are
+            // not below any parameter decl nodes
+            return;
+        }
+        if (parent_node.is_func_node)
+            break;
+        ref_node = parent_node;
+    }
+
+    if (utils.get_distance_from_block(ref_node, func_node)
+     <= utils.get_distance_from_block(decl_node, func_node)) {
+
+        throw [ ref_node_0,
+                'parameter referenced before initialization' ];
+    }
+
+    ref_node_0.temp_block_stmt = {};
 }
 
 // ------------------------------------------------------------

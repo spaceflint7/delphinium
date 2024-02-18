@@ -32,4 +32,22 @@ console.log(obj);
 console.log(Object.getOwnPropertyNames(obj));
 console.log(Object.getOwnPropertyDescriptors(obj));
 
+let stringWrapper = new String('ABCD');
+stringWrapper[99] = 'test';
+stringWrapper[Symbol.iterator] = true;
+console.log(stringWrapper);
+
+console.log(String(), 'vs', String(undefined));
+
+console.log(String.prototype.charAt.call(false,4));
+console.log('Z'.charAt());
+console.log('Z'.charCodeAt());
+console.log('Z'.charCodeAt());
+let stringFrom = String.fromCharCode(90,NaN,undefined,false);
+console.log(stringFrom.charCodeAt(0),
+            stringFrom.charCodeAt(1),
+            stringFrom.charCodeAt(2),
+            stringFrom.charCodeAt(3),
+            stringFrom.charCodeAt(4));
+
 })()

@@ -216,7 +216,7 @@ static void js_shape_switch (js_environ *env,
 // js_shape_index
 //
 // ------------------------------------------------------------
-
+/*
 int js_shape_index (js_environ *env, js_shape *shape, js_val prop) {
 
     int64_t idx_or_ptr;
@@ -224,7 +224,7 @@ int js_shape_index (js_environ *env, js_shape *shape, js_val prop) {
                (uint64_t *)&idx_or_ptr);
     return (int)~idx_or_ptr;
 }
-
+*/
 // ------------------------------------------------------------
 //
 // js_shape_value

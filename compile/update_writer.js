@@ -540,19 +540,19 @@ function unary_expression (expr) {
     switch (expr.operator) {
 
         case '~':
-            text += `likely(0!=js_is_number(${arg}))?js_make_number(`
+            text += `likely(js_is_number(${arg}))?js_make_number(`
                  +  `(int32_t)~(int64_t)js_get_number(${arg}))`
                  +  `:js_unary_op(env,'~',${arg})`;
             break;
 
         case '-':
-            text += `likely(0!=js_is_number(${arg}))`
+            text += `likely(js_is_number(${arg}))`
                  +  `?js_make_number(-js_get_number(${arg}))`
                  +  `:js_unary_op(env,'-',${arg})`;
             break;
 
         case '+':
-            text += `likely(0!=js_is_number(${arg}))?${arg}`
+            text += `likely(js_is_number(${arg}))?${arg}`
                  +  `:js_unary_op(env,'+',${arg})`;
             break;
 

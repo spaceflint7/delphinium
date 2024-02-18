@@ -131,3 +131,20 @@
     }
 
 })();
+
+// ------------
+// test 7
+// ------------
+
+;(function () {
+
+    function f1 (prim = 1234, obj = new Object(prim)) { console.log(obj); }
+    f1();f1(undefined);f1('ABCD');f1([123,456]);
+
+    function f2 ([ x, y, z ] = '123') { console.log(x, y, z); }
+    f2();f2(undefined);f2('abc');
+
+    function f3 ({ x, y, z } = { x: 10, y: 20, z: 30 }) { console.log(x, y, z); }
+    f3();f3(undefined);f3({ x: 'a', y: 'b', z: 'c' });
+
+})();

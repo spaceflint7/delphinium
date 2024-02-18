@@ -8,15 +8,16 @@
 ;(function String_init () {
 
 const Object = _global.Object;
+const js_str_utf16 = _shadow.js_str_utf16;
 
 //
 // String constructor
 //
 
-function String (text) {
+function String (...text) {
 
-    // xxx change to ...rest args
-    if (arguments.length) {
+    if (text.length) {
+        text = text[0];
         if (typeof(text) === 'symbol' && !new.target)
             text = _shadow.Symbol_toString.call(key);
         text = '' + text;
@@ -28,6 +29,8 @@ function String (text) {
 
     return text;
 }
+
+defineProperty(String, 'length', { value: 1 });
 
 //
 // String prototype
@@ -47,6 +50,22 @@ defineProperty(String, 'prototype',
     { value: String_prototype, writable: false });
 
 //
+// String.fromCharCode
+//
+
+defineNotEnum(String, 'fromCharCode', {
+fromCharCode (...codeUnits) {
+    const n = codeUnits.length;
+    if (n === 1)
+        return js_str_utf16(+codeUnits[0]);
+    for (let i = 0; i < n; i++)
+        codeUnits[i] = +codeUnits[i];
+    return js_str_utf16(codeUnits);
+
+}}.fromCharCode);
+defineProperty(String.fromCharCode, 'length', { value: 1 });
+
+//
 // String functions
 //
 
@@ -64,8 +83,34 @@ defineNotEnum(String_prototype, 'strike',       notImpl);
 defineNotEnum(String_prototype, 'sub',          notImpl);
 defineNotEnum(String_prototype, 'sup',          notImpl);
 
-//defineNotEnum(String_prototype, 'charAt', charAt);
-//defineNotEnum(String_prototype, 'charCodeAt', charCodeAt);
+//
+// charAt
+//
+
+defineNotEnum(String_prototype, 'charAt', function charAt (pos) {
+
+    const str = check_str_arg(this);
+    if ((pos = +pos) !== pos)
+        pos = 0; // NaN --> 0
+    if (pos >= 0 && pos < str.length)
+        return str[pos];
+    return '';
+});
+
+//
+// charCodeAt
+//
+
+defineNotEnum(String_prototype, 'charCodeAt', function charCodeAt (pos) {
+
+    const str = check_str_arg(this);
+    if ((pos = +pos) !== pos)
+        pos = 0; // NaN --> 0
+    if (pos >= 0 && pos < str.length)
+        return js_str_utf16(str[pos]);
+    return NaN;
+});
+
 //defineNotEnum(String_prototype, 'codePointAt',
 //defineNotEnum(String_prototype, 'concat',
 //defineNotEnum(String_prototype, 'endsWith',
@@ -145,9 +190,24 @@ function iterator_next () {
 overrideFunctionName(iterator, _shadow.this_iterator[_Symbol.iterator].name);
 overrideFunctionName(iterator_next, 'next');
 
+// ------------------------------------------------------------
+//
+// check_str_arg
+//
+// ------------------------------------------------------------
+
+function check_str_arg (obj) {
+
+    if (obj === undefined || obj === null)
+        _shadow.TypeError_convert_null_to_object();
+    return '' + obj;
+}
+
+// ------------------------------------------------------------
 //
 // notImpl function
 //
+// ------------------------------------------------------------
 
 function notImpl () {
 

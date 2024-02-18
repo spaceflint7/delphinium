@@ -654,9 +654,15 @@ function object_expression (expr) {
     let proto, extra = [];
     for (const prop of expr.properties) {
         if (prop.is_shape_property) {
-            if (prop.kind === 'init')
-                text += ',' + expression_writer(prop.value);
-            else if (prop.kind === 'get'
+            if (prop.kind === 'init') {
+                const v = prop.value;
+                if (prop.method) {
+                    // function in object expression
+                    v.id = prop.key;
+                    v.decl_node.not_constructor = true;
+                }
+                text += ',' + expression_writer(v);
+            } else if (prop.kind === 'get'
                  ||  prop.kind === 'set') {
                 // getter or setter requires js_newobj2 ()
                 // but we still need a placeholder for the

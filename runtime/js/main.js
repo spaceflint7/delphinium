@@ -46,8 +46,6 @@ function overrideFunctionName (func_obj, new_name) {
 
 const js_keys_in_object = _shadow.js_keys_in_object;
 const js_property_flags = _shadow.js_property_flags;
-const js_num_util = _shadow.js_num_util;
-const js_big_util = _shadow.js_big_util;
 const js_str_print = _shadow.js_str_print;
 const js_getOrSetPrototype = _shadow.js_getOrSetPrototype;
 const js_private_object = _shadow.js_private_object;

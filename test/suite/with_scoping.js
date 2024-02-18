@@ -74,3 +74,18 @@ with (gen_scope) {
 }
 gen_scope = {};
 console.log(gen_func().next());
+
+//
+// below tests for strict and non-strict mode,
+// but this is not related to 'with' scoping.
+//
+
+// test block-scoped function declaration
+;(function () { 'use strict';
+    function f() { return 'OUTER_SCOPE'; }
+    if (true) { function f() { return 'INNER_SCOPE'; }
+        console.log(f()); } console.log(f()); })();
+;(function () {
+    function f() { return 'OUTER_SCOPE'; }
+    if (true) { function f() { return 'INNER_SCOPE'; }
+        console.log(f()); } console.log(f()); })();

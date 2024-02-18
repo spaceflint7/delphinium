@@ -159,7 +159,10 @@ function log2obj (arg) {
     let tag = is_primitive_wrapper(arg);
     if (tag) {
         js_str_print(tag);
-        log3(arg, ' { ', ' }');
+        if (tag[1] === 'S' && tag[2] === 't')
+            log3_str(arg);
+        else
+            log3(arg, ' { ', ' }');
         return;
     }
 
@@ -194,6 +197,8 @@ function log2obj (arg) {
         if (primitive_value !== undefined) {
             let primitive_type_name =
                     primitive_value.constructor.name;
+            if (typeof(primitive_value) === 'string')
+                primitive_value = "'" + primitive_value + "'";
             if (typeof(primitive_value) === 'bigint')
                 primitive_value = primitive_value + 'n';
             return '[' + primitive_type_name
@@ -361,6 +366,36 @@ function log3_map (arg, tag, print_value) {
         js_str_print(' ');
 
     return sep;
+}
+
+//
+// log3_str
+//
+
+function log3_str (arg) {
+
+    // get all enumerable string and symbol keys,
+    // but discard numeric keys
+    const str_len = arg.length;
+    const tmp_keys = log3_keys(arg);
+    const tmp_n = tmp_keys.length;
+    const keys = [];
+    let n = 0;
+    for (let tmp_i = 0; tmp_i < tmp_n; tmp_i++) {
+        if (tmp_keys[tmp_i] === tmp_i)
+            continue;
+        keys[n++] = tmp_keys[tmp_i];
+    }
+
+    if (n) {
+        js_str_print(' { ');
+        log4(arg, keys[0]);
+        for (let i = 1; i < n; i++) {
+            js_str_print(', ');
+            log4(arg, keys[i]);
+        }
+        js_str_print(' }');
+    }
 }
 
 //

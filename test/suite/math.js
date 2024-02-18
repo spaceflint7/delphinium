@@ -338,3 +338,11 @@ console.log(count, sum > 49000, sum < 51000);
 // min and max
 console.log('max', Math.max(), Math.max(1, NaN), Math.max(10, 200, -Infinity, 5));
 console.log('min ', Math.min(), Math.min(1, NaN), Math.min(10, 200, +Infinity, 5));
+
+// fib
+;(function () {
+    let n1 = 0, n2 = 1;
+    for (let i = 1; i <= 103; i++) {
+        if (i >= 95) console.log(n1.toFixed(8));
+        const n3 = n1 + n2; n1 = n2; n2 = n3;
+    } } )()

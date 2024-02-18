@@ -7,6 +7,8 @@
 
 ;(function Number_init () {
 
+const js_num_util = _shadow.js_num_util;
+
 // ------------------------------------------------------------
 //
 // Number constructor

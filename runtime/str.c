@@ -600,7 +600,6 @@ static js_val js_sym_util (js_c_func_args) {
 
     js_val arg_val = js_undefined;
     js_val ret_val = js_undefined;
-    objset_id *id;
 
     js_link *arg_ptr = stk_args->next;
     if (arg_ptr != js_stk_top)
@@ -616,7 +615,7 @@ static js_val js_sym_util (js_c_func_args) {
         &&  prim_type != js_prim_is_symbol)
             break;
 
-        id = js_get_pointer(arg_val);
+        objset_id *id = js_get_pointer(arg_val);
 
         objset_id *id2 = js_malloc(
                             sizeof(objset_id) + id->len);
@@ -635,6 +634,70 @@ static js_val js_sym_util (js_c_func_args) {
         js_gc_manage(env, ret_val);
 
     } while (false);
+
+    js_return(ret_val);
+}
+
+// ------------------------------------------------------------
+//
+// js_str_utf16 - convert utf-16 representations
+// from numeric to string and vice versa.
+//
+// ------------------------------------------------------------
+
+static js_val js_str_utf16 (js_c_func_args) {
+
+    js_val arg_val = js_undefined;
+    js_val ret_val = js_undefined;
+
+    js_link *arg_ptr = stk_args->next;
+    if (arg_ptr != js_stk_top)
+        arg_val = arg_ptr->value;
+
+    if (js_is_primitive_string(arg_val)) {
+
+        objset_id *id = js_get_pointer(arg_val);
+        if (id->len >= sizeof(wchar_t))
+            ret_val.num = (uint16_t)id->data[0];
+
+    } else if (js_is_number(arg_val)) {
+
+        objset_id *id = js_malloc(sizeof(objset_id)
+                                + sizeof(wchar_t));
+        id->len = sizeof(wchar_t);
+        id->flags = js_str_is_string;
+        id->data[0] = (uint16_t)arg_val.num;
+
+        ret_val = js_gc_manage(env,
+                    js_make_primitive_string(id));
+
+    } else if (js_is_object(arg_val)) {
+
+        js_arr *arr = js_get_pointer(arg_val);
+        if (js_obj_is_exotic(arr, js_obj_is_array)) {
+            uint32_t len = arr->length;
+            if (len && len != -1U) {
+
+                objset_id *id = js_malloc(sizeof(objset_id)
+                                  + len * sizeof(wchar_t));
+                id->len = len * sizeof(wchar_t);
+                id->flags = js_str_is_string;
+
+                uint16_t *data = id->data;
+                js_val *val = arr->values;
+                for (;;) {
+                    *data = (uint16_t)(val->num);
+                    if (!(--len))
+                        break;
+                    data++;
+                    val++;
+                }
+
+                ret_val = js_gc_manage(env,
+                            js_make_primitive_string(id));
+            }
+        }
+    }
 
     js_return(ret_val);
 }
@@ -765,5 +828,10 @@ static void js_str_init_2 (js_environ *env) {
     // shadow.js_sym_util function
     js_newprop(env, env->shadow_obj,
             js_str_c(env, "js_sym_util")) =
-                js_unnamed_func(js_sym_util, 2);
+                js_unnamed_func(js_sym_util, 1);
+
+    // shadow.js_str_utf16 function
+    js_newprop(env, env->shadow_obj,
+            js_str_c(env, "js_str_utf16")) =
+                js_unnamed_func(js_str_utf16, 1);
 }

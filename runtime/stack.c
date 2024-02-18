@@ -77,7 +77,6 @@ void js_growstack (js_environ *env, js_link *stk, int needed) {
         js_link *stk_next = stk->next;
         js_link *old_link = stk_next;
         while (old_link) {
-            old_link->value = js_undefined;
             old_link->depth += extra_links;
             old_link = old_link->next;
         }
@@ -90,7 +89,6 @@ void js_growstack (js_environ *env, js_link *stk, int needed) {
         // attach the new links into the stack
         old_link = stk;
         while (extra_links --> 0) {
-            new_link->value = js_undefined;
             new_link->depth =
                         js_link_depth(old_link) + 1;
             new_link->prev = old_link;

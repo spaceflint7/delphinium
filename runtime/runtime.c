@@ -143,9 +143,6 @@ struct js_environ {
     js_obj *func_proto;     // Function.prototype
     js_shape *func_shape1;  // shape af a new function object
     js_shape *func_shape2;  // shape of a new prototype object
-    int func_length;
-    int func_name;
-    int func_prototype;
 
     js_val func_hasinstance;
     js_val func_bound_prefix;
@@ -157,7 +154,6 @@ struct js_environ {
     // arrays
     js_obj *arr_proto;      // Array.prototype
     js_shape *arr_shape;
-    int arr_length;
 
     // symbols
     js_val sym_iterator;

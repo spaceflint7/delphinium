@@ -7,6 +7,8 @@
 
 ;(function BigInt_init () {
 
+const js_big_util = _shadow.js_big_util;
+
 // ------------------------------------------------------------
 //
 // BigInt constructor
@@ -36,7 +38,7 @@ const BigInt_prototype = (0n).__proto__;
 defineNotEnum(BigInt_prototype, 'constructor', BigInt);
 
 defineProperty(BigInt, 'prototype',
-      { value: BigInt_prototype, writable: false });
+    { value: BigInt_prototype, writable: false });
 
 // ------------------------------------------------------------
 //

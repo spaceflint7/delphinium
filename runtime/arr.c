@@ -31,7 +31,7 @@ js_val js_newarr (js_environ *env, int num_values, ...) {
 
     // create a descriptor for the 'length' property
 
-    arr->super.values[env->arr_length] = js_make_descriptor(
+    arr->super.values[0 /* length */] = js_make_descriptor(
             js_setdescr((js_descriptor *)arr->length_descr,
                         js_descr_value | js_descr_write,
                         js_make_number(arr->length),
@@ -283,9 +283,7 @@ static void js_arr_init (js_environ *env) {
                         js_make_number(0.0),
                         js_make_number(0.0)));
 
-    js_shape *shape = env->arr_shape = obj_ptr->shape;
-
-    env->arr_length = js_shape_index(env, shape, env->str_length);
+    env->arr_shape = obj_ptr->shape;
 
     // create the Array.prototype object.  note that
     // js_newarr () uses 'arr_proto' as the prototype,

@@ -178,8 +178,8 @@ _shadow.TypeError_cyclicPrototype = function throw_TypeError () {
 
 _shadow.TypeError_readOnlyProperty = function throw_TypeError (prop) {
 
-    prop = prop ? (': ' + prop) : '';
-    throw TypeError('Cannot set read-only property' + prop);
+    throw TypeError('Cannot set read-only property'
+                + fix_prop_name(prop));
 }
 
 _shadow.TypeError_primitiveProperty = function throw_TypeError () {
@@ -189,8 +189,8 @@ _shadow.TypeError_primitiveProperty = function throw_TypeError () {
 
 _shadow.TypeError_deleteProperty = function throw_TypeError (prop) {
 
-    prop = prop ? (': ' + prop) : '';
-    throw TypeError('Cannot delete a non-configurable property' + prop);
+    throw TypeError('Cannot delete a non-configurable property'
+                + fix_prop_name(prop));
 }
 
 _shadow.TypeError_convert_null_to_object = function throw_TypeError () {
@@ -200,20 +200,20 @@ _shadow.TypeError_convert_null_to_object = function throw_TypeError () {
 
 _shadow.TypeError_get_property_of_null_object = function throw_TypeError (prop) {
 
-    prop = prop ? (': ' + prop) : '';
-    throw TypeError('Cannot get property of undefined or null');
+    throw TypeError('Cannot get property of undefined or null'
+                + fix_prop_name(prop));
 }
 
 _shadow.TypeError_set_property_of_null_object = function throw_TypeError (prop) {
 
-    prop = prop ? (': ' + prop) : '';
-    throw TypeError('Cannot set property of undefined or null' + prop);
+    throw TypeError('Cannot set property of undefined or null'
+                + fix_prop_name(prop));
 }
 
 _shadow.TypeError_object_not_extensible = function throw_TypeError (prop) {
 
-    prop = prop ? (': ' + prop) : '';
-    throw TypeError('Cannot add property to non-extensible object' + prop);
+    throw TypeError('Cannot add property to non-extensible object'
+                + fix_prop_name(prop));
 }
 
 _shadow.TypeError_expected_symbol = function throw_TypeError () {
@@ -330,8 +330,8 @@ _shadow.ReferenceError_uninitialized_variable = function throw_ReferenceError ()
 
 _shadow.ReferenceError_not_defined = function throw_ReferenceError (prop) {
 
-    prop = prop ? (': ' + prop) : '';
-    throw ReferenceError('Property or variable is not defined' + prop);
+    throw ReferenceError('Property or variable is not defined'
+                + fix_prop_name(prop));
 }
 
 _shadow.RangeError_array_length = function throw_RangeError () {
@@ -474,6 +474,17 @@ _shadow.get_exception_as_string = function (exc) {
     }
 
     return str;
+}
+
+// ------------------------------------------------------------
+
+function fix_prop_name (prop) {
+
+    if (typeof(prop) === 'symbol')
+        prop = _shadow.Symbol_toString.call(prop);
+    else if (typeof(prop !== 'string'))
+        return '';
+    return (': ' + prop);
 }
 
 // ------------------------------------------------------------

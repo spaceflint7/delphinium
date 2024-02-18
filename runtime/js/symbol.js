@@ -30,15 +30,13 @@ _shadow.js_flag_as_not_constructor(Symbol);
 // symbol values by js_get_primitive_proto () in obj.c.
 //
 
+defineNotEnum(_global, 'Symbol', Symbol);
+_shadow.Symbol = _Symbol = Symbol; // keep a copy
+
 const Symbol_prototype = Symbol('').__proto__;
 
-defineProperty(Symbol, 'prototype', {
-    value: Symbol_prototype });
-
-defineProperty(_global, 'Symbol', { configurable: true,
-    value: Symbol, writable: true, /* not enumerable */ });
-
-_shadow.Symbol = _Symbol = Symbol; // keep a copy
+defineProperty(Symbol, 'prototype',
+    { value: Symbol_prototype, writable: false });
 
 // ------------------------------------------------------------
 //

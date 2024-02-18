@@ -94,7 +94,7 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
     // length { value: (arity), writable: false,
     //          enumerable: false, configurable: true }
     arity &= ~(js_strict_mode | js_not_constructor);
-    values[env->func_length] =
+    values[0 /* length */] =
         js_make_descriptor(js_newdescr(
             js_descr_value | js_descr_config,
             js_make_number(arity), zero));
@@ -103,7 +103,7 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
     //          enumerable: false, configurable: true }
     if (!js_is_primitive_string(name))
         name = env->str_empty;
-    values[env->func_name] =
+    values[1 /* name */] =
         js_make_descriptor(js_newdescr(
             js_descr_value | js_descr_config,
             name, zero));
@@ -117,7 +117,7 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
     // in statement_writer.js
     //
 
-    values[env->func_prototype] = js_deleted;
+    values[2 /* prototype */] = js_deleted;
 
     js_val ret_func =
             js_gc_manage(env, js_make_object(func));
@@ -159,13 +159,7 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
         js_val new_proto =
             js_gc_manage(env, js_make_object(new_obj));
 
-        /*js_val new_proto =
-            js_newobj(env, env->func_shape2,
-                js_make_descriptor(js_newdescr(
-                    js_descr_value | js_descr_write
-                  | js_descr_config, ret_func, zero)));*/
-
-        values[env->func_prototype] =
+        values[2 /* prototype */] =
                 js_make_descriptor(js_newdescr(
                     js_descr_value | js_descr_write,
                     new_proto, zero));
@@ -464,54 +458,46 @@ js_val *js_closureval (js_environ *env,
                        js_val func_val,
                        int closure_index) {
 
-    if (js_is_object(func_val)) {
+    js_val *val_ptr;
+    const js_func *func_obj = js_get_pointer(func_val);
+    js_val **closure_array = func_obj->closure_array;
+    const int closure_count = func_obj->closure_count;
 
-        const js_obj *obj_ptr = (js_obj *)js_get_pointer(func_val);
-        if (js_obj_is_exotic(obj_ptr, js_obj_is_function)) {
+    if (closure_index < 0) {
+        // a negated index is used when the parent of
+        // a nested function must forward closure vars
+        // to its nested function, and that parent does
+        // not itself reference those particular vars.
+        // the negated index means the forwarded var may
+        // not be initialized, so we must skip the check.
+        // see also import_local_from_outer_func () in
+        // function_writer.js
+        closure_index = ~closure_index;
+        if (closure_index < closure_count) {
 
-            js_val *val_ptr;
-            const js_func *func_obj = (js_func *)obj_ptr;
-            js_val **closure_array = func_obj->closure_array;
-            const int closure_count = func_obj->closure_count;
-
-            if (closure_index < 0) {
-                // a negated index is used when the parent of
-                // a nested function must forward closure vars
-                // to its nested function, and that parent does
-                // not itself reference those particular vars.
-                // the negated index means the forwarded var may
-                // not be initialized, so we must skip the check.
-                // see also import_local_from_outer_func () in
-                // function_writer.js
-                closure_index = ~closure_index;
-                if (closure_index < closure_count) {
-
-                    val_ptr = closure_array[closure_index
-                                          + closure_count];
-                    return val_ptr;
-                }
-
-            } else if (closure_index < closure_count) {
-
-                // request to reference a closure variable.
-                // note that we first
-
-                val_ptr = closure_array[closure_index
-                                      + closure_count];
-
-                if (val_ptr->raw != js_uninitialized.raw)
-                    return (closure_array[closure_index] = val_ptr);
-
-                // access to an uninitialized variable
-                js_callshadow(
-                    env, "ReferenceError_uninitialized_variable",
-                    js_undefined);
-            }
+            val_ptr = closure_array[closure_index
+                                  + closure_count];
+            return val_ptr;
         }
+
+    } else if (closure_index < closure_count) {
+
+        // request to reference a closure variable.
+        // note that we first
+
+        val_ptr = closure_array[closure_index
+                              + closure_count];
+
+        if (val_ptr->raw != js_uninitialized.raw)
+            return (closure_array[closure_index] = val_ptr);
+
+        // access to an uninitialized variable
+        js_callshadow(
+            env, "ReferenceError_uninitialized_variable",
+            js_undefined);
     }
 
-    // it is an internal error if func_val is not a function,
-    // or if closure_index is not a valid value
+    // internal error caused by invalid parameters
     fprintf(stderr, "Closure error!\n");
     exit(1);
 }
@@ -679,7 +665,7 @@ static js_val js_proto_bind (js_c_func_args) {
             length.num = 0;
     }
     ((js_descriptor *)js_get_pointer(
-                func->super.values[env->func_length]))
+                func->super.values[0 /* length */]))
                                 ->data_or_getter = length;
 
     // keep the bind parameters in the closure array.
@@ -807,7 +793,6 @@ static js_val js_flag_as_not_constructor (js_c_func_args) {
 static void js_func_init (js_environ *env) {
 
     js_val obj;
-    js_shape *shape;
 
     // set the default value for the new.target property
     env->new_target = js_undefined;
@@ -824,15 +809,11 @@ static void js_func_init (js_environ *env) {
     js_newprop(env, obj, env->str_length)    = js_make_number(0.0);
     js_newprop(env, obj, env->str_name)      = js_make_number(0.0);
     js_newprop(env, obj, env->str_prototype) = js_make_number(0.0);
-
-    shape = env->func_shape1 = ((js_obj *)js_get_pointer(obj))->shape;
-    env->func_length    = js_shape_index(env, shape, env->str_length);
-    env->func_name      = js_shape_index(env, shape, env->str_name);
-    env->func_prototype = js_shape_index(env, shape, env->str_prototype);
+    env->func_shape1 = ((js_obj *)js_get_pointer(obj))->shape;
 
     obj = js_emptyobj(env);
     js_newprop(env, obj, env->str_constructor) = js_make_number(0.0);
-    shape = env->func_shape2 = ((js_obj *)js_get_pointer(obj))->shape;
+    env->func_shape2 = ((js_obj *)js_get_pointer(obj))->shape;
 
     // create the Function.prototype object, which is
     // required to be a non-constructor function.  note that
@@ -845,7 +826,7 @@ static void js_func_init (js_environ *env) {
     js_func *func_proto = js_get_pointer(obj);
     func_proto->flags |= js_not_constructor;
     // delete 'prototype' property from Function.prototype
-    func_proto->super.values[env->func_prototype] = js_deleted;
+    func_proto->super.values[2 /* prototype */] = js_deleted;
 
     env->func_proto = (void *)((uintptr_t)func_proto
                                         | js_obj_is_function);

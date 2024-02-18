@@ -42,15 +42,14 @@ function Object (val) {
 //
 // ------------------------------------------------------------
 
+defineNotEnum(_global, 'Object', Object);
+_shadow.Object = Object; // keep a copy
+
 const Object_prototype = js_getOrSetPrototype({});
-const Object_descriptor = { configurable: true,
-    value: Object, writable: true, /* not enumerable */ };
+defineNotEnum(Object_prototype, 'constructor', Object);
 
 defineProperty(Object, 'prototype',
-        { value: Object_prototype, writable: false });
-defineProperty(Object_prototype, 'constructor', Object_descriptor);
-defineProperty(_global, 'Object', Object_descriptor);
-_shadow.Object = Object; // keep a copy
+    { value: Object_prototype, writable: false });
 
 // ------------------------------------------------------------
 //

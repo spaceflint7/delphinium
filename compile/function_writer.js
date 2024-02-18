@@ -96,9 +96,14 @@ exports.write_function = function (func, output) {
     }
     // dummy statements to prevent warnings about unused functions
     for (const child_func of func.child_funcs) {
-        const c_name = child_func?.decl_node?.c_name;
-        if (c_name)
-            void_vars += `(void)${c_name};`;
+        const decl_node = child_func.decl_node;
+        if (decl_node?.c_name) {
+            const declaration_is_at_function_scope =
+                decl_node.parent_node
+                            .parent_node.is_func_node;
+            if (declaration_is_at_function_scope)
+                void_vars += `(void)${decl_node.c_name};`;
+        }
     }
     if (void_vars)
         output.push(void_vars);
@@ -120,11 +125,14 @@ function write_param_locals (func_stmt) {
         // rather than the actual local for the parameter.
         // we then allocate a closure variable, and assign
         // the value from the temp local to the closure var.
-        let c_name, c_name_var, is_rest_elem,
+        let c_name, c_name_var, is_rest_elem, initializer,
             is_identifier, is_identifier_closure;
         if (node.type === 'RestElement') {
             is_rest_elem = true;
             node = node.argument;
+        } else if (node.type === 'AssignmentPattern') {
+            initializer = node.right;
+            node = node.left;
         }
         if (node.type === 'Identifier') {
             // a plain identifier gets a c_name, even if it
@@ -154,6 +162,13 @@ function write_param_locals (func_stmt) {
                       + `${c_name}=${stk_ptr}->value;`
                       + `${stk_ptr}=${stk_ptr}->next;`
                       + `}else ${c_name}=js_undefined;`);
+            if (initializer) {
+                output.push(`if(unlikely(js_is_undefined(${c_name}))){`);
+                const expr_text =
+                            write_expression_in_temp_block(
+                                            initializer, output);
+                output.push(`${c_name}=(${expr_text});}`);
+            }
         }
 
         if (is_identifier_closure) {
@@ -225,29 +240,49 @@ function write_param_locals (func_stmt) {
             node2.is_property_name = true;
         }
 
-        let temp_block_node = {
-            type: 'BlockStatement',
-            temp_vals: [], init_text: [],
-            is_temp_block_node: true,
-        };
-
-        let temp = {
+        const temp_expr = {
             type: 'AssignmentExpression', operator: '=',
             left: node, // ArrayPattern or ObjectPattern
-            right: {
-                type: 'Literal', c_name: arg_c_name,
-                parent_node: temp_block_node
-            },
-            parent_node: temp_block_node,
+            right: { type: 'Literal', c_name: arg_c_name },
         };
+        temp_expr.right.parent_node = temp_expr;
 
-        let text = write_expression(temp, false);
-        temp_block_node.temp_vals.forEach(nm =>
-            output.push(`js_val ${nm};`));
-        output.push(...temp_block_node.init_text);
-        output.push(text + ';');
+        const expr_text =
+                    write_expression_in_temp_block(
+                                    temp_expr, output);
+        output.push(expr_text + ';');
         return true;
     }
+}
+
+// ------------------------------------------------------------
+
+function write_expression_in_temp_block (expr_node, output) {
+
+    let temp_block_node = {
+        type: 'BlockStatement',
+        temp_vals: [], temp_stks: [], init_text: [],
+        // flag used by assignment_expression ()
+        // in expression_writer.js
+        is_temp_block_node: true,
+    };
+
+    const save_parent_node = expr_node.parent_node;
+    expr_node.parent_node = temp_block_node;
+
+    let text = write_expression(expr_node, false);
+
+    expr_node.parent_node = save_parent_node;
+
+    temp_block_node.temp_vals.forEach(nm =>
+        output.push(`js_val ${nm};`));
+
+    temp_block_node.temp_stks.forEach(nm =>
+        output.push(`js_link *${nm};`));
+
+    output.push(...temp_block_node.init_text);
+
+    return text;
 }
 
 // ------------------------------------------------------------
@@ -267,7 +302,12 @@ function write_var_locals (func_stmt, block_stmt_list) {
 
     for (var [name, node] of func_stmt.scope) {
 
-        if (node.kind === 'var') {
+        const is_non_strict_function_declaration =
+            (node.type === 'FunctionDeclaration'
+                    && !func_stmt.strict_mode);
+
+        if (   node.kind === 'var'
+            || is_non_strict_function_declaration) {
 
             let_stmt.declarations.push({
                 type: 'VariableDeclarator',
@@ -393,7 +433,7 @@ exports.function_expression = function (expr) {
     if (decl_node.strict_mode)
         arity = 'js_strict_mode|' + arity;
     if (decl_node.not_constructor) {
-        // arrow/generator/async functions
+        // method/arrow/generator/async functions
         arity = 'js_not_constructor|' + arity;
     }
 

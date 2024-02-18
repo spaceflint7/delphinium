@@ -224,6 +224,9 @@ function variable_declaration_special_node (decl) {
         if (decl.id.name === 'new.target') {
             decl.init = { type: 'Literal',
                 c_name: 'env->new_target' };
+        } else if (decl.id.name === 'parent.this') {
+            decl.init = { type: 'Literal',
+                c_name: 'this_val' };
         } else
             throw [ decl, 'unknown meta property' ];
     }
@@ -434,13 +437,17 @@ function function_declaration (stmt, output) {
     let func_expr = write_expression(copy_node, false);
     const var_name = utils_c.get_variable_c_name(stmt);
 
+    // in strict mode, function declarations are scoped
+    // to a block;  in non-strict mode, to the function
+    const func_stmt = utils.get_parent_func_node(stmt);
+    let js_val_prefix = func_stmt.strict_mode
+                      ? 'js_val ' : '';
+
     // in non-strict mode, a function declaration inside an
     // 'if' statement is hoisted to the top of the function.
     // see also write_var_locals () in function_writer.js,
     // which declares such variables
-    let js_val_prefix = 'js_val ';
     if (stmt.parent_node?.type === 'IfStatement') {
-        const func_stmt = utils.get_parent_func_node(stmt);
         if (!func_stmt.strict_mode)
             js_val_prefix = stmt.is_closure ? '*' : '';
 
@@ -449,7 +456,7 @@ function function_declaration (stmt, output) {
         // so it must be declared as a closure variable,
         // i.e. a pointer to a value, in the same way that
         // variable_declaration () handles a closure var.
-        utils_c.insert_init_text(stmt,
+        utils_c.insert_init_text(func_stmt.body,
             new_closure_var_prefix + var_name + new_closure_var_suffix);
         js_val_prefix = '*';
     }

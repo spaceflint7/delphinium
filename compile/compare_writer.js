@@ -33,8 +33,21 @@ function compare_equality (expr) {
                                   left, right, true);
             if (!text) {
 
+                let suffix;
+                if (!utils.is_basic_expr_node(expr.left)) {
+                    // if left is not a trivial expression,
+                    // it may cause a side-effect on right,
+                    // so evaluate left before function call
+                    const tmp = utils_c.alloc_temp_value(expr);
+                    text = `((${tmp}=${left}),`;
+                    left = tmp;
+                    suffix = ')';
+
+                } else
+                    text = suffix = '';
+
                 // loose equality
-                text = `js_loose_eq(env,${left},${right})`;
+                text += `js_loose_eq(env,${left},${right})${suffix}`;
             }
 
         } else {

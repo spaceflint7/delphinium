@@ -43,6 +43,15 @@ test (function () {
     function f() { console.log('f2 - test 4'); }; f();
 })
 
+/*test (function () {
+    // var declaration in a block scope cannot override
+    // a function declaration hoisted to function scope
+    if (true) {
+        var f = 1234;       // can't catch SyntaxError
+        function f () {};
+    }
+})*/
+
 // ------------
 //
 // test function arity
@@ -69,3 +78,33 @@ test (function () {
     console.log(Object.getOwnPropertyDescriptors(arr_fun));
     console.log(new arr_fun());
 })
+
+// ------------
+//
+// method functions have no prototype
+//
+// ------------
+
+test (function () {
+
+    const obj = { f(a, ...b) {} };
+    console.log(Object.getOwnPropertyDescriptors(obj)
+              , Object.getOwnPropertyDescriptors(obj.f));
+})
+
+// ------------
+//
+// 'this' and 'arguments' in arrow functions
+//
+// ------------
+
+;(function () {
+
+  const x = (p) => { console.log(this,arguments[0],arguments[1]); } ;
+  function y ()    { console.log(this,arguments[0],arguments[1]); }
+
+  x(5678);
+  x.call(1234, 33,44);
+  y.call(1234, 55,66);
+
+}).call('THIS', 77,88);
