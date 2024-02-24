@@ -18,16 +18,14 @@ static js_val js_tonumber_integer (const char *ptr) {
 
     int base;
     switch (*ptr) {
-        case 'b': case 'B': base = 2; break;
-        case 'o': case 'O': base = 8; break;
-        case 'x': case 'X': base = 16; break;
-        case '\0': return js_make_number(0);
-        default:  return js_nan;
+        case 'b': case 'B':             base = 2;  break;
+        case 'o': case 'O': case '0':   base = 8;  break;
+        case 'x': case 'X':             base = 16; break;
+        case '\0':              return js_make_number(0);
+        default:                return js_nan;
     }
     char *stop;
     uint64_t val = strtoull(++ptr, &stop, base);
-    while (js_str_is_white_space(*stop))
-        stop++;
     if (*stop != '\0')
         return js_nan;
     return js_make_number(val);
@@ -39,7 +37,8 @@ static js_val js_tonumber_integer (const char *ptr) {
 //
 // ------------------------------------------------------------
 
-static js_val js_tonumber_decimal (const char *ptr) {
+static js_val js_tonumber_decimal (
+                    const char *ptr, bool parse) {
 
     js_val val;
     bool neg = false;
@@ -56,9 +55,7 @@ static js_val js_tonumber_decimal (const char *ptr) {
     else if (*ptr >= '0' && *ptr <= '9') {
         char *stop;
         val.num = strtod(ptr, &stop);
-        while (js_str_is_white_space(*stop))
-            stop++;
-        if (*stop != '\0')
+        if (*stop != '\0' && !parse)
             return js_nan;
     } else
         return js_nan;
@@ -67,6 +64,42 @@ static js_val js_tonumber_decimal (const char *ptr) {
         val.raw |= 1ULL << 63;
 
     return val;
+}
+
+// ------------------------------------------------------------
+//
+// js_tonumber_toascii
+//
+// ------------------------------------------------------------
+
+static bool js_tonumber_toascii (js_val val, char *dst) {
+
+    const objset_id *id = js_get_pointer(val);
+    int len = id->len >> 1; // byte length to char count
+
+    // skip leading whitespace
+    const wchar_t *src = id->data;
+    while (len && js_str_is_white_space(*src)) {
+        len--;
+        src++;
+    }
+
+    if (!len)
+        return false;
+
+    // copy js string into null-terminated ascii buffer
+    if (len >= num_string_buffer_size - 4)
+        len  = num_string_buffer_size - 4;
+    for (;;) {
+        *dst++ = *src++;
+        if (!(--len))
+            break;
+        if (js_str_is_white_space(*src))
+            break;
+    }
+    *dst = '\0';
+
+    return true;
 }
 
 // ------------------------------------------------------------
@@ -109,27 +142,9 @@ static js_val js_tonumber (js_environ *env, js_val val) {
     // otherwise parse as a decimal integer.
     //
 
-    const objset_id *id = js_get_pointer(val);
-    int len = id->len >> 1; // byte length to char count
-
-    // skip leading whitespace
-    const wchar_t *src = id->data;
-    while (len && js_str_is_white_space(*src)) {
-        len--;
-        src++;
-    }
-
-    if (!len)
-        return js_make_number(0.0);
-
-    // copy js string into null-terminated ascii buffer
     char *str = env->num_string_buffer;
-    char *dst = str;
-    if (len >= num_string_buffer_size - 4)
-        len  = num_string_buffer_size - 4;
-    while (len--)
-        *dst++ = *src++;
-    *dst = '\0';
+    if (!js_tonumber_toascii(val, str))
+        return js_make_number(0.0);
 
     // parse ascii string as a number in one of two ways
     if (str[0] == '0') {
@@ -139,7 +154,7 @@ static js_val js_tonumber (js_environ *env, js_val val) {
         if (!is_decimal_point_or_digit)
             return js_tonumber_integer(str + 1);
     }
-    return js_tonumber_decimal(str);
+    return js_tonumber_decimal(str, false);
 }
 
 // ------------------------------------------------------------
@@ -397,11 +412,95 @@ static js_val js_num_binary_op (js_environ *env, int op,
 
 // ------------------------------------------------------------
 //
+// js_num_parse
+//
+// ------------------------------------------------------------
+
+static js_val js_num_parse (js_environ *env,
+                            js_val val, js_val radix) {
+
+    // the operation of js parseInt () / parseFloat ()
+    // is a bit different than js_tonumber (), but also
+    // starts with stripping leading whitespace
+
+    char *str = env->num_string_buffer;
+    if (!js_tonumber_toascii(val, str))
+        return js_nan;
+
+    //
+    // if radix was not specified, our caller
+    // is parseFloat () in runtime2/number.js.
+    //
+
+    if (js_is_undefined(radix))
+        return js_tonumber_decimal(str, true);
+
+    //
+    // otherwise we are called from parseInt ()
+    // which we implement here
+    //
+
+    if (!js_is_number(radix)) {
+        radix = js_tonumber(env, radix);
+        if (!js_is_number(radix))
+            js_callthrow("TypeError_invalid_argument");
+    }
+
+    // strip optional sign (+ or -)
+    bool neg = false;
+    if (*str == '+')
+        str++;
+    else if (*str == '-') {
+        str++;
+        neg = true;
+    }
+
+    int base;
+    if (radix.num == radix.num && radix.num) {
+        // input radix is not zero and not NaN
+        base = radix.num;
+        if (base < 2 || base > 36)
+            return js_nan;
+
+    } else {
+        // if no radix specified, then strip leading
+        // zeroes, and an optional 0x prefix.  but
+        // if base 16, we let strtoull () handle it.
+        base = 10;
+        while (*str == '0') {
+            str++;
+            if (*str == 'x' || *str == 'X') {
+                str++;
+                base = 16;
+                break;
+            } else if (*str > '9')
+                return js_nan;
+        }
+    }
+
+    //
+    // parse the integer and return it
+    //
+
+    char *stop;
+    uint64_t num = strtoull(str, &stop, base);
+    if (stop == str)
+        return js_nan;
+
+    val.num = num;
+    if (neg)
+        val.raw |= 1ULL << 63;
+    return val;
+}
+
+// ------------------------------------------------------------
+//
 // js_num_util
 //
 // ------------------------------------------------------------
 
 static js_val js_num_util (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val input   = js_undefined;
     js_val which   = js_undefined;
@@ -422,6 +521,14 @@ static js_val js_num_util (js_c_func_args) {
     if (which.num == /* 0x43 */ (double)'C') {
 
         ret_val = js_tonumber(env, input);
+        js_return(ret_val);
+    }
+
+    // second parameter is 'R' for paRse
+    if (which.num == /* 0x52 */ (double)'R'
+            && js_is_primitive_string(input)) {
+
+        ret_val = js_num_parse(env, input, extra);
         js_return(ret_val);
     }
 

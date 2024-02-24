@@ -19,8 +19,6 @@ function BigInt (val) {
     return js_big_util(val, 0x43 /* C */); // Constructor
 }
 
-_shadow.js_flag_as_not_constructor(BigInt);
-
 // ------------------------------------------------------------
 //
 // BigInt prototype
@@ -36,9 +34,7 @@ _shadow.BigInt = BigInt; // keep a copy
 
 const BigInt_prototype = (0n).__proto__;
 defineNotEnum(BigInt_prototype, 'constructor', BigInt);
-
-defineProperty(BigInt, 'prototype',
-    { value: BigInt_prototype, writable: false });
+defineProperty(BigInt, 'prototype', { value: BigInt_prototype });
 
 // ------------------------------------------------------------
 //

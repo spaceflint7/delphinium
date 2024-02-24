@@ -263,6 +263,10 @@ void js_growstack (js_environ *env, js_link *stk, int needed);
             js_link_depth(js_stk_top) < (n)))   \
         js_growstack(env, js_stk_top, (n));
 
+// function entry prolog, set up stack frame
+#define js_prolog_stack_frame() \
+    stk_args->value.raw = func_val.raw | 2
+
 // reset the flagged function object on the stack,
 // restore stack pointer to the caller-saved value,
 // and return the specified return value

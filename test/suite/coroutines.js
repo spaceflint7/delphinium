@@ -27,8 +27,8 @@
     let gen_func = function* MyGenerator (abc, def, xyz) {};
     console.log('#11', Object.getOwnPropertyDescriptors(gen_func));
     console.log('#12', Object.getOwnPropertyDescriptors(gen_func().__proto__));
-    console.log('#12', Object.getOwnPropertyDescriptors(gen_func().__proto__.__proto__));
-    console.log('#12', Object.getOwnPropertyDescriptors(gen_func().__proto__.__proto__.__proto__));
+    console.log('#13', Object.getOwnPropertyDescriptors(gen_func().__proto__.__proto__));
+    console.log('#14', Object.getOwnPropertyDescriptors(gen_func().__proto__.__proto__.__proto__));
 
 })()
 

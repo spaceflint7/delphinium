@@ -93,6 +93,7 @@ static int js_descr_array_length_writable (
 // ------------------------------------------------------------
 
 static js_val js_getOwnProperty (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val obj_val = js_undefined;
     js_val prop_val = js_undefined;
@@ -200,6 +201,7 @@ static js_val js_getOwnProperty_2 (
 // ------------------------------------------------------------
 
 static js_val js_property_flags (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val obj_val = js_undefined;
     js_val prop_val = js_undefined;

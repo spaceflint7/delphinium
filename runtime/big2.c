@@ -419,6 +419,7 @@ static js_val js_big_truncate (js_environ *env, js_val input,
 // ------------------------------------------------------------
 
 static js_val js_big_util (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val input   = js_undefined;
     js_val which   = js_undefined;

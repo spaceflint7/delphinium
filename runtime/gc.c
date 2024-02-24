@@ -857,6 +857,7 @@ static void js_gc_configure (js_gc_env *gc, js_link *arg_ptr) {
 // ------------------------------------------------------------
 
 static js_val js_gc_util (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val ret_val = js_true;
 #ifdef js_gc_build

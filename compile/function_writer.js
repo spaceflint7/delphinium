@@ -43,8 +43,7 @@ exports.write_function = function (func, output) {
 
     // insert our own function object into the stack frame,
     // with bit 1 set, to indicate the start of a new frame.
-    output.splice(++insert_index, 0,
-        'stk_args->value.raw=func_val.raw|2;');
+    output.splice(++insert_index, 0, 'js_prolog_stack_frame();');
 
     // if coroutine, yield execution at this point,
     // see also js_coroutine_init3 () in coroutine.c

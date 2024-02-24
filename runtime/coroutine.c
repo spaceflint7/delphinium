@@ -385,6 +385,7 @@ static js_val js_coroutine_resume (
 // ------------------------------------------------------------
 
 static js_val js_coroutine (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val cmd  = js_undefined;
     js_val arg1 = js_undefined;

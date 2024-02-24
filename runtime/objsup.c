@@ -23,6 +23,7 @@
 // ------------------------------------------------------------
 
 static js_val js_getOrSetPrototype (js_c_func_args) {
+    js_prolog_stack_frame();
 
     //
     // collect parameters, validate 'obj' parameter
@@ -196,6 +197,7 @@ static js_val js_isExtensible (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_keys_in_object (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val obj_val = js_undefined;
     js_link *arg_ptr = stk_args->next;

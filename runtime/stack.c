@@ -327,8 +327,7 @@ static js_link *js_walkstack (js_link *stk_ptr) {
 // ------------------------------------------------------------
 
 static js_val js_stack_trace (js_c_func_args) {
-
-    stk_args->value.raw = func_val.raw | 2; // stack frame
+    js_prolog_stack_frame();
 
     /* DUMP CONTENTS OF STACK
     js_link *s0 = stk_args;

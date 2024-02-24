@@ -20,7 +20,8 @@ static js_environ *js_init (int64_t version_code) {
     js_environ *env = (js_environ *)
         /* alloc and clear */ js_calloc(1, sizeof(js_environ));
 
-    env->internal_flags |= jsf_abort_if_non_strict;
+    env->internal_flags |= jsf_abort_if_non_strict
+                        |  jsf_not_constructor;
 
     //env->init_elapsed_time = js_elapsed_time();
 
@@ -81,7 +82,8 @@ static void js_init3 (js_environ *env) {
     // disable detection of non-strict functions
     //
 
-    env->internal_flags &= ~jsf_abort_if_non_strict;
+    env->internal_flags ^= jsf_abort_if_non_strict
+                        |  jsf_not_constructor;
 }
 
 // ------------------------------------------------------------

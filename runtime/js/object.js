@@ -42,14 +42,14 @@ function Object (val) {
 //
 // ------------------------------------------------------------
 
+_shadow.js_flag_as_constructor(Object);
+
 defineNotEnum(_global, 'Object', Object);
 _shadow.Object = Object; // keep a copy
 
 const Object_prototype = js_getOrSetPrototype({});
 defineNotEnum(Object_prototype, 'constructor', Object);
-
-defineProperty(Object, 'prototype',
-    { value: Object_prototype, writable: false });
+defineProperty(Object, 'prototype', { value: Object_prototype });
 
 // ------------------------------------------------------------
 //

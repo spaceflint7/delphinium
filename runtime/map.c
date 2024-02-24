@@ -367,6 +367,7 @@ static js_val js_map_util_2 (js_environ *env,
 // ------------------------------------------------------------
 
 static js_val js_map_util (js_c_func_args) {
+    js_prolog_stack_frame();
 
     int cmd = 0;
     js_val arg = js_undefined;

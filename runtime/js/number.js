@@ -8,6 +8,7 @@
 ;(function Number_init () {
 
 const js_num_util = _shadow.js_num_util;
+const trunc = _shadow.math.trunc;
 
 // ------------------------------------------------------------
 //
@@ -18,6 +19,8 @@ const js_num_util = _shadow.js_num_util;
 function Number (val) {
     return js_num_util(val, 0x43 /* C */); // Constructor
 }
+
+_shadow.js_flag_as_constructor(Number);
 
 // ------------------------------------------------------------
 //
@@ -34,9 +37,7 @@ _shadow.Number = Number; // keep a copy
 
 const Number_prototype = (0).__proto__;
 defineNotEnum(Number_prototype, 'constructor', Number);
-
-defineProperty(Number, 'prototype',
-      { value: Number_prototype, writable: false });
+defineProperty(Number, 'prototype', { value: Number_prototype });
 
 // ------------------------------------------------------------
 //
@@ -78,9 +79,7 @@ function toLocaleString () { return this.toString(); });
 // ------------------------------------------------------------
 
 defineNotEnum(Number_prototype, 'valueOf',
-function valueOf () {
-    return 'UNKNOWN VALUE OF NUMBER';
-});
+function valueOf () { return +this; });
 
 // ------------------------------------------------------------
 //
@@ -88,7 +87,19 @@ function valueOf () {
 //
 // ------------------------------------------------------------
 
-defineNotEnum(Number, 'isFinite', function isFinite () {
+let _isFinite;
+
+defineNotEnum(Number, 'isFinite',
+_isFinite = function isFinite (num) {
+    if (typeof(num) !== 'number')
+        return false;
+    if (num !== num)
+        return false;
+    if (num === Infinity)
+        return false;
+    if (num === -Infinity)
+        return false;
+    return true;
 });
 
 // ------------------------------------------------------------
@@ -97,7 +108,9 @@ defineNotEnum(Number, 'isFinite', function isFinite () {
 //
 // ------------------------------------------------------------
 
-defineNotEnum(Number, 'isInteger', function isInteger () {
+defineNotEnum(Number, 'isInteger',
+function isInteger (num) {
+    return (_isFinite(num) && trunc(num) === num);
 });
 
 // ------------------------------------------------------------
@@ -106,7 +119,8 @@ defineNotEnum(Number, 'isInteger', function isInteger () {
 //
 // ------------------------------------------------------------
 
-defineNotEnum(Number, 'isNaN', function isNaN () {
+defineNotEnum(Number, 'isNaN', function isNaN (num) {
+    return (num !== num);
 });
 
 // ------------------------------------------------------------
@@ -115,25 +129,53 @@ defineNotEnum(Number, 'isNaN', function isNaN () {
 //
 // ------------------------------------------------------------
 
-defineNotEnum(Number, 'isSafeInteger', function isSafeInteger () {
+defineNotEnum(Number, 'isSafeInteger',
+function isSafeInteger (num) {
+    if (_isFinite(num)) {
+        if (num >= -9007199254740991 &&
+            num <= 9007199254740991)
+        {
+            return (trunc(num) === num);
+        }
+    }
+    return false;
 });
 
 // ------------------------------------------------------------
 //
 // Number.parseFloat
-//
-// ------------------------------------------------------------
-
-defineNotEnum(Number, 'parseFloat', function parseFloat () {
-});
-
-// ------------------------------------------------------------
-//
 // Number.parseInt
 //
 // ------------------------------------------------------------
 
-defineNotEnum(Number, 'parseInt', function parseInt () {
+function parseFloat (val) {
+    return js_num_util(val, 0x52 /* R */); // paRse
+}
+
+function parseInt (val, radix) {
+    return js_num_util(val, 0x52 /* R */, radix); // paRse
+}
+
+defineNotEnum(Number,  'parseFloat', parseFloat);
+defineNotEnum(Number,  'parseInt',   parseInt);
+
+defineNotEnum(_global, 'parseFloat', parseFloat);
+defineNotEnum(_global, 'parseInt',   parseInt);
+
+// ------------------------------------------------------------
+//
+// global.isFinite
+// global.isNaN
+//
+// ------------------------------------------------------------
+
+defineNotEnum(_global, 'isFinite',
+function isFinite (val) { return (isFinite(+val)); });
+
+defineNotEnum(_global, 'isNaN',
+function isNaN (val) {
+    val = +val;
+    return (val !== val);
 });
 
 // ------------------------------------------------------------

@@ -12,15 +12,20 @@ const js_hasinstance = _shadow.js_hasinstance;
 // the js_coroutine () function from coroutine.c
 const js_coroutine = _shadow.js_coroutine;
 
+// ------------------------------------------------------------
 //
 // Function constructor
 //
+// ------------------------------------------------------------
 
 function Function (text) {
     // incomplete implementation, see also ECMA 20.2.1.1
     _shadow.TypeError_unsupported_operation();
 }
 
+_shadow.js_flag_as_constructor(Function);
+
+// ------------------------------------------------------------
 //
 // Function prototype
 //
@@ -28,15 +33,14 @@ function Function (text) {
 // in js_func_init () in file func.c. it is attached
 // to new function objects in js_newfunc ().
 //
+// ------------------------------------------------------------
 
 defineNotEnum(_global, 'Function', Function);
 _shadow.Function = Function; // keep a copy
 
 const Function_prototype = Function.__proto__;
 defineNotEnum(Function_prototype, 'constructor', Function);
-
-defineProperty(Function, 'prototype',
-        { value: Function_prototype, writable: false });
+defineProperty(Function, 'prototype', { value: Function_prototype });
 
 //
 // Function.prototype.arguments
@@ -50,6 +54,7 @@ defineProperty(Function, 'prototype',
 const deprecated_throw = function () {
     throw TypeError('Invalid use of \'arguments\', \'caller\' or \'callee\' property');
 }
+overrideFunctionName(deprecated_throw, '');
 
 const deprecated_throw_descr = {
     configurable: true, /* not enumerable */
@@ -198,14 +203,12 @@ function GeneratorFunction (unused) {
 
 js_getOrSetPrototype(GeneratorFunction, Function);
 
-var GeneratorFunction_prototype = {
-    __proto__: Function.prototype };
-defineConfig(GeneratorFunction_prototype, 'prototype',
-                Generator.prototype);
-defineConfig(GeneratorFunction_prototype, 'constructor',
-                GeneratorFunction);
-defineConfig(GeneratorFunction_prototype, _Symbol.toStringTag,
-                'GeneratorFunction');
+const Generator_prototype = {};
+const GeneratorFunction_prototype = {
+    __proto__: Function_prototype };
+defineConfig(GeneratorFunction_prototype, 'prototype', Generator_prototype);
+defineConfig(GeneratorFunction_prototype, 'constructor', GeneratorFunction);
+defineConfig(GeneratorFunction_prototype, _Symbol.toStringTag, 'GeneratorFunction');
 
 defineProperty(GeneratorFunction, 'prototype',
                 {   value: GeneratorFunction_prototype,
@@ -219,21 +222,19 @@ _shadow.GeneratorFunction = GeneratorFunction;
 
 function Generator () { }
 
+_shadow.js_flag_as_constructor(Generator);
+
 const generator_context_symbol = _Symbol('generator_context_symbol');
 Generator.context_symbol = generator_context_symbol;
 Generator.wrapper_prototype = GeneratorFunction_prototype;
 
-const Generator_prototype = Generator.prototype;
-
+defineProperty(Generator, 'prototype', { value: Generator_prototype });
 js_getOrSetPrototype(Generator_prototype, _shadow.this_iterator);
 
-defineProperty(Generator_prototype, 'constructor',
-                { value: GeneratorFunction_prototype, writable: false });
-
+defineConfig(Generator_prototype, 'constructor', GeneratorFunction_prototype);
 defineNotEnum(Generator_prototype, 'next',   Generator_next);
 defineNotEnum(Generator_prototype, 'return', Generator_return);
 defineNotEnum(Generator_prototype, 'throw',  Generator_throw);
-
 defineConfig(Generator_prototype, _Symbol.toStringTag, 'Generator');
 
 _shadow.Generator = Generator;
@@ -249,7 +250,7 @@ function Generator_next (next_val) {
     return js_coroutine(0x4E /* N */, ctx, next_val);
 }
 
-Object.defineProperty(Generator_next, 'name', { value: 'next' });
+overrideFunctionName(Generator_next, 'next');
 
 //
 // Generator_return
@@ -262,7 +263,7 @@ function Generator_return (return_val) {
     return js_coroutine(0x52 /* R */, ctx, return_val);
 }
 
-Object.defineProperty(Generator_return, 'name', { value: 'return' });
+overrideFunctionName(Generator_return, 'return');
 
 //
 // Generator_throw
@@ -275,7 +276,7 @@ function Generator_throw (throw_val) {
     return js_coroutine(0x54 /* T */, ctx, throw_val);
 }
 
-Object.defineProperty(Generator_throw, 'name', { value: 'throw' });
+overrideFunctionName(Generator_throw, 'throw');
 
 // ------------------------------------------------------------
 

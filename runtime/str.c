@@ -589,155 +589,6 @@ static js_val js_tostring (js_environ *env, js_val val) {
 
 // ------------------------------------------------------------
 //
-// js_sym_util - utility function for managing Symbols.
-// if first argument is a string, creates a new symbol value
-// with that string description.  if the first argument is
-// a symbol, returns the description string for the symbol.
-//
-// ------------------------------------------------------------
-
-static js_val js_sym_util (js_c_func_args) {
-
-    js_val arg_val = js_undefined;
-    js_val ret_val = js_undefined;
-
-    js_link *arg_ptr = stk_args->next;
-    if (arg_ptr != js_stk_top)
-        arg_val = arg_ptr->value;
-
-    do {
-
-        if (!js_is_primitive(arg_val))
-            break;
-
-        int prim_type = js_get_primitive_type(arg_val);
-        if (prim_type != js_prim_is_string
-        &&  prim_type != js_prim_is_symbol)
-            break;
-
-        objset_id *id = js_get_pointer(arg_val);
-
-        objset_id *id2 = js_malloc(
-                            sizeof(objset_id) + id->len);
-        memcpy(id2->data, id->data,
-                            (id2->len = id->len));
-
-        // return a symbol for a descr string,
-        // return a descr string for a symbol
-        if (prim_type == js_prim_is_string) {
-            id2->flags = js_str_is_symbol;
-            ret_val = js_make_primitive_symbol(id2);
-        } else {
-            id2->flags = js_str_is_string;
-            ret_val = js_make_primitive_string(id2);
-        }
-        js_gc_manage(env, ret_val);
-
-    } while (false);
-
-    js_return(ret_val);
-}
-
-// ------------------------------------------------------------
-//
-// js_str_utf16 - convert utf-16 representations
-// from numeric to string and vice versa.
-//
-// ------------------------------------------------------------
-
-static js_val js_str_utf16 (js_c_func_args) {
-
-    js_val arg_val = js_undefined;
-    js_val ret_val = js_undefined;
-
-    js_link *arg_ptr = stk_args->next;
-    if (arg_ptr != js_stk_top)
-        arg_val = arg_ptr->value;
-
-    if (js_is_primitive_string(arg_val)) {
-
-        objset_id *id = js_get_pointer(arg_val);
-        if (id->len >= sizeof(wchar_t))
-            ret_val.num = (uint16_t)id->data[0];
-
-    } else if (js_is_number(arg_val)) {
-
-        objset_id *id = js_malloc(sizeof(objset_id)
-                                + sizeof(wchar_t));
-        id->len = sizeof(wchar_t);
-        id->flags = js_str_is_string;
-        id->data[0] = (uint16_t)arg_val.num;
-
-        ret_val = js_gc_manage(env,
-                    js_make_primitive_string(id));
-
-    } else if (js_is_object(arg_val)) {
-
-        js_arr *arr = js_get_pointer(arg_val);
-        if (js_obj_is_exotic(arr, js_obj_is_array)) {
-            uint32_t len = arr->length;
-            if (len && len != -1U) {
-
-                objset_id *id = js_malloc(sizeof(objset_id)
-                                  + len * sizeof(wchar_t));
-                id->len = len * sizeof(wchar_t);
-                id->flags = js_str_is_string;
-
-                uint16_t *data = id->data;
-                js_val *val = arr->values;
-                for (;;) {
-                    *data = (uint16_t)(val->num);
-                    if (!(--len))
-                        break;
-                    data++;
-                    val++;
-                }
-
-                ret_val = js_gc_manage(env,
-                            js_make_primitive_string(id));
-            }
-        }
-    }
-
-    js_return(ret_val);
-}
-
-// ------------------------------------------------------------
-//
-// js_str_print
-//
-// ------------------------------------------------------------
-
-static js_val js_str_print (js_c_func_args) {
-
-    const wchar_t *txt_ptr = L"?";
-               int txt_len = 1;
-
-    js_link *arg_ptr = stk_args->next;
-    if (arg_ptr != js_stk_top) {
-
-        js_val arg_val = arg_ptr->value;
-        if (js_is_primitive_string(arg_val)) {
-
-            const objset_id *id = js_get_pointer(arg_val);
-            txt_ptr = id->data;
-            txt_len = id->len >> 1;
-
-        // while the primary purpose is to print strings,
-        // it also serves as a general debug-print utility
-        } else {
-            printf("<dbg>");
-            js_print(env, arg_val);
-            js_return(js_undefined);
-        }
-    }
-
-    printf("%*.*ls", txt_len, txt_len, txt_ptr);
-    js_return(js_undefined);
-}
-
-// ------------------------------------------------------------
-//
 // js_str_init
 //
 // ------------------------------------------------------------
@@ -808,6 +659,8 @@ static void js_str_init (js_environ *env) {
 //
 // ------------------------------------------------------------
 
+#include "strsup.c"
+
 static void js_str_init_2 (js_environ *env) {
 
     js_val obj;
@@ -820,18 +673,5 @@ static void js_str_init_2 (js_environ *env) {
     obj = js_emptyobj(env);
     env->sym_proto = (void *)((uintptr_t)js_get_pointer(obj));
 
-    // shadow.js_str_print function
-    js_newprop(env, env->shadow_obj,
-            js_str_c(env, "js_str_print")) =
-                js_unnamed_func(js_str_print, 1);
-
-    // shadow.js_sym_util function
-    js_newprop(env, env->shadow_obj,
-            js_str_c(env, "js_sym_util")) =
-                js_unnamed_func(js_sym_util, 1);
-
-    // shadow.js_str_utf16 function
-    js_newprop(env, env->shadow_obj,
-            js_str_c(env, "js_str_utf16")) =
-                js_unnamed_func(js_str_utf16, 1);
+    js_str_init_sup(env);
 }

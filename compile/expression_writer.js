@@ -463,8 +463,10 @@ function write_call_arguments (expr) {
         text += `js_stk_top->value=${arg_text}${stk_next}`;
     }
 
-    // zero-init the slot reserved for callee function
-    text += 'js_stk_top->value.raw=0,';
+    // an uninitialized stack slot remains, where
+    // callee inserts its own flagged func_val.
+    // see also use of js_prolog_stack_frame in
+    // write_function () and elsewhere
 
     return text;
 }
@@ -697,8 +699,8 @@ function object_expression (expr) {
             if (prop.type === 'SpreadElement') {
                 // spread expression, defined as '...object'
                 // or ...{ object expression }
-                text += ',js_next_is_spread';
-                text += ',' + expression_writer(prop.argument);
+                text += ',js_next_is_spread,';
+                text += expression_writer(prop.argument);
                 continue;
             }
 
@@ -727,38 +729,17 @@ function object_expression (expr) {
 
 function array_expression (expr) {
 
-    // if this is a plain array expression which does not
-    // include a spread element, then a single call to
-    // js_newarr () in arr.c takes care of everything
-
-    let found_spread = false;
+    let text = `js_newarr(env,${expr.elements.length}`;
     for (const elem of expr.elements) {
-        if (elem?.type === 'SpreadElement') {
-            found_spread = true;
-            break;
-        }
+        if (!elem)
+            text += ',js_deleted';
+        else if (elem.type === 'SpreadElement') {
+            text += ',js_next_is_spread,'
+                 +  expression_writer(elem.argument);
+        } else
+            text += ',' + expression_writer(elem);
     }
-
-    let text = 'js_newarr(env,';
-
-    if (!found_spread) {
-
-        text += expr.elements.length.toString();
-        for (const elem of expr.elements) {
-            const elem_text = !elem ? 'js_deleted'
-                            : expression_writer(elem);
-            text += ',' + elem_text;
-        }
-        return text + ')';
-    }
-
-    // otherwise we need a two-step process where we create
-    // an empty array, push elements into it as if this was
-    // a call to Array.push (), and then return the new array
-
-    const tmp = utils_c.alloc_temp_value(expr);
-    text = `${tmp}=${text},0),`;
-    throw [ expr, 'to-impl along with call-spread '];
+    return text + ')';
 }
 
 // ------------------------------------------------------------

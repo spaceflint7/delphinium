@@ -12,6 +12,7 @@
 
 #define js_math_func_impl(jsname,cname)                 \
     static js_val js_math_##jsname (js_c_func_args) {   \
+        js_prolog_stack_frame();                        \
         js_link *arg_ptr = stk_args->next;              \
         js_val x;                                       \
         if (unlikely(arg_ptr == js_stk_top))            \
@@ -64,6 +65,7 @@ js_math_func_impl(tanh,  tanh)
 // ------------------------------------------------------------
 
 static js_val js_math_atan2 (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_link *arg_ptr = stk_args->next;
     js_val x, y;
@@ -97,6 +99,7 @@ static js_val js_math_atan2 (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_math_clz32 (js_c_func_args) {
+    js_prolog_stack_frame();
 
     uint32_t x = 0;
     js_link *arg_ptr = stk_args->next;
@@ -117,6 +120,7 @@ static js_val js_math_clz32 (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_math_hypot (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_link *arg_ptr = stk_args->next;
     js_val x, y;
@@ -187,6 +191,7 @@ static js_val js_math_hypot (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_math_imul (js_c_func_args) {
+    js_prolog_stack_frame();
 
     int32_t r = 0;
     js_link *arg_ptr = stk_args->next;
@@ -215,6 +220,7 @@ static js_val js_math_imul (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_math_max (js_c_func_args) {
+    js_prolog_stack_frame();
 
     double r = -INFINITY;
     js_link *arg_ptr = stk_args;
@@ -238,6 +244,7 @@ static js_val js_math_max (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_math_min (js_c_func_args) {
+    js_prolog_stack_frame();
 
     double r = INFINITY;
     js_link *arg_ptr = stk_args;
@@ -261,6 +268,7 @@ static js_val js_math_min (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_math_pow (js_c_func_args) {
+    js_prolog_stack_frame();
 
     js_val r = js_nan;
     js_link *arg_ptr = stk_args->next;
@@ -289,6 +297,7 @@ static js_val js_math_pow (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_math_random (js_c_func_args) {
+    js_prolog_stack_frame();
 
     // https://en.wikipedia.org/wiki/Xorshift
     uint64_t x = env->math_random_state;

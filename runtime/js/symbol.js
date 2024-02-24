@@ -9,9 +9,11 @@
 
 const js_sym_util = _shadow.js_sym_util;
 
+// ------------------------------------------------------------
 //
 // Symbol constructor
 //
+// ------------------------------------------------------------
 
 function Symbol (description) {
     // the tostring conversion will throw an error,
@@ -20,8 +22,7 @@ function Symbol (description) {
     return js_sym_util('' + description);
 }
 
-_shadow.js_flag_as_not_constructor(Symbol);
-
+// ------------------------------------------------------------
 //
 // Symbol prototype
 //
@@ -29,14 +30,13 @@ _shadow.js_flag_as_not_constructor(Symbol);
 // in js_str_init_2 () in file str.c. it is attached to
 // symbol values by js_get_primitive_proto () in obj.c.
 //
+// ------------------------------------------------------------
 
 defineNotEnum(_global, 'Symbol', Symbol);
 _shadow.Symbol = _Symbol = Symbol; // keep a copy
 
 const Symbol_prototype = Symbol('').__proto__;
-
-defineProperty(Symbol, 'prototype',
-    { value: Symbol_prototype, writable: false });
+defineProperty(Symbol, 'prototype', { value: Symbol_prototype });
 
 // ------------------------------------------------------------
 //

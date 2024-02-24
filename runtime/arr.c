@@ -1,27 +1,101 @@
 
 // ------------------------------------------------------------
 //
+// js_newarr_spread
+//
+// ------------------------------------------------------------
+
+static js_val *js_newarr_spread (js_environ *env,
+                                 js_arr *arr,
+                                 js_val *val_ptr,
+                                 js_val iterator_val) {
+
+    js_val iter[3];
+    js_newiter(env, iter, 'O', iterator_val);
+
+    while (iter[0].raw) {
+
+        *val_ptr++ = iter[2];
+        uint32_t length = val_ptr - arr->values;
+        if (likely(length < arr->capacity)) {
+
+            js_nextiter1(env, iter);
+            continue;
+        }
+
+        // current capacity, divided by 16, and clamped
+        // between 4 and 256, determines the increment
+        uint32_t increment = arr->capacity >> 4;
+        if (increment < 4)
+            increment = 4;
+        else if (increment > 256)
+            increment = 256;
+
+        // calculate new capacity
+        uint32_t new_capacity =
+                    arr->capacity + increment;
+        if (new_capacity > js_max_index)
+            js_callthrow("RangeError_array_length");
+
+        // re-allocate the values, and copy old elements
+        js_val *new_values =
+            js_malloc(new_capacity * sizeof(js_val));
+        memcpy(new_values, arr->values,
+                    length * sizeof(js_val));
+
+        arr->values = new_values;
+        arr->capacity = new_capacity;
+
+        val_ptr = new_values + length;
+        js_nextiter1(env, iter);
+    }
+
+    return val_ptr;
+}
+
+// ------------------------------------------------------------
+//
 // js_newarr
 //
 // ------------------------------------------------------------
 
 js_val js_newarr (js_environ *env, int num_values, ...) {
 
-    js_arr *arr = js_newexobj(
-                    env, env->arr_proto, env->arr_shape);
+    js_arr *arr = js_newexobj(env, env->arr_proto,
+                              env->arr_shape);
 
     if (num_values > 0) {
 
-        arr->capacity = arr->length = num_values;
-
-        js_val *values = arr->values =
-                js_malloc(num_values * sizeof(js_val));
+        js_val *val_ptr = arr->values =
+            js_malloc(sizeof(js_val) *
+                (arr->capacity = num_values));
 
         va_list args;
         va_start(args, num_values);
-        while (num_values-- > 0)
-            *values++ = va_arg(args, js_val);
+
+        while (num_values-- > 0) {
+
+            js_val next_val = va_arg(args, js_val);
+            if (next_val.raw != js_next_is_spread.raw) {
+
+                *val_ptr++ = next_val;
+                continue;
+            }
+
+            next_val = va_arg(args, js_val);
+            val_ptr = js_newarr_spread(
+                        env, arr, val_ptr, next_val);
+        }
+
         va_end(args);
+
+        uint32_t length = val_ptr - arr->values;
+        arr->length = length;
+
+        // clear elements between length and capacity
+        js_val *end_ptr = &arr->values[arr->capacity];
+        while (val_ptr != end_ptr)
+            *val_ptr++ = js_deleted;
 
     } else {
 

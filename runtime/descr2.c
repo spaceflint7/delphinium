@@ -43,6 +43,7 @@ static js_val js_getOwnProperty_2 (
 // ------------------------------------------------------------
 
 static js_val js_defineProperty (js_c_func_args) {
+    js_prolog_stack_frame();
 
     //
     // function prolog, initialize parameters

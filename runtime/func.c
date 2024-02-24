@@ -6,6 +6,7 @@
 // ------------------------------------------------------------
 
 #define jsf_abort_if_non_strict 1
+#define jsf_not_constructor     2
 
 struct js_closure_var {
 
@@ -36,6 +37,10 @@ js_val js_newfunc (js_environ *env, js_c_func c_func,
 
     // arity may include some flag bits
     func->flags = arity & (js_strict_mode | js_not_constructor);
+
+    // during initialization, always 'js_not_constructor'
+    if (unlikely(env->internal_flags & jsf_not_constructor))
+        func->flags |= js_not_constructor;
 
     // default shape for 'this' is null, see also js_callnew ()
     // (also note that 'with_scope' occupies the same space.)
@@ -377,7 +382,7 @@ js_val js_callfunc (js_c_func_args) {
         js_obj *func_obj = (js_obj *)js_get_pointer(func_val);
         if (js_obj_is_exotic(func_obj, js_obj_is_function)) {
 
-            stk_args->value.raw = func_val.raw | 2; // stack frame
+            js_prolog_stack_frame(); // stack frame
 
             return ((js_func *)func_obj)->c_func(
                         env, func_val, this_val, stk_args);
@@ -391,6 +396,8 @@ js_val js_callfunc (js_c_func_args) {
     //
     // throw on error
     //
+
+    stk_args->value = js_uninitialized;
 
     js_throw_func_name_hint(env, func_name_hint,
                             "TypeError_expected_function");
@@ -550,9 +557,8 @@ static js_val js_callshadow (js_environ *env,
                             js_str_c(env, func_name), false);
 
     if (ptr_func_val
-    && js_obj_is_exotic(
-            (js_obj *)js_get_pointer(*ptr_func_val),
-            js_obj_is_function)) {
+    && js_obj_is_exotic(js_get_pointer(*ptr_func_val),
+                        js_obj_is_function)) {
 
         return js_callfunc1(
                 env, *ptr_func_val, js_undefined, arg_val);
@@ -610,8 +616,7 @@ static js_val js_proto_call (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_proto_bind (js_c_func_args) {
-
-    stk_args->value.raw = func_val.raw | 2; // stack frame
+    js_prolog_stack_frame();
 
     // make sure bind () was called on a function object
     func_val = this_val;
@@ -701,6 +706,7 @@ static js_val js_proto_bind (js_c_func_args) {
 // ------------------------------------------------------------
 
 static js_val js_hasinstance (js_c_func_args) {
+    js_prolog_stack_frame();
 
     // implementation of 'object' instanceof 'function'.
     // the 'function' is passed in the 'this' argument.
@@ -758,11 +764,11 @@ static js_val js_hasinstance (js_c_func_args) {
 
 // ------------------------------------------------------------
 //
-// js_flag_as_not_constructor
+// js_flag_as_constructor
 //
 // ------------------------------------------------------------
 
-static js_val js_flag_as_not_constructor (js_c_func_args) {
+static js_val js_flag_as_constructor (js_c_func_args) {
 
     js_link *arg_ptr = stk_args->next;
     js_val arg_val = arg_ptr != js_stk_top
@@ -770,10 +776,10 @@ static js_val js_flag_as_not_constructor (js_c_func_args) {
 
     if (js_is_object(arg_val)) {
 
-        js_obj *obj_ptr = (js_obj *)js_get_pointer(arg_val);
-        if (js_obj_is_exotic(obj_ptr, js_obj_is_function)) {
+        js_func *func_obj = js_get_pointer(arg_val);
+        if (js_obj_is_exotic(func_obj, js_obj_is_function)) {
 
-            ((js_func *)obj_ptr)->flags |= js_not_constructor;
+            func_obj->flags &= ~js_not_constructor;
         }
     }
 
@@ -819,17 +825,13 @@ static void js_func_init (js_environ *env) {
     // required to be a non-constructor function.  note that
     // js_newfunc () uses 'func_proto' as the prototype, so
     // we first (temporarily) point that to Object.prototype.
-    env->func_proto = (void *)((uintptr_t)env->obj_proto
-                    | js_obj_is_function);
+    env->func_proto = (void *)
+            ((uintptr_t)env->obj_proto | js_obj_is_function);
     obj = js_unnamed_func(js_nop, 0);
 
     js_func *func_proto = js_get_pointer(obj);
-    func_proto->flags |= js_not_constructor;
-    // delete 'prototype' property from Function.prototype
-    func_proto->super.values[2 /* prototype */] = js_deleted;
-
-    env->func_proto = (void *)((uintptr_t)func_proto
-                                        | js_obj_is_function);
+    env->func_proto = (void *)
+                ((uintptr_t)func_proto | js_obj_is_function);
 
     // the prefix string 'bound '
     env->func_bound_prefix = js_str_c(env, "bound ");
@@ -854,10 +856,10 @@ static void js_func_init (js_environ *env) {
     js_newprop(env, env->shadow_obj,
         js_str_c(env, "js_proto_bind")) = obj;
 
-    // expose the utility function 'js_flag_as_not_constructor'
+    // expose the utility function 'js_flag_as_constructor'
     js_newprop(env, env->shadow_obj,
-            js_str_c(env, "js_flag_as_not_constructor")) =
-                js_unnamed_func(js_flag_as_not_constructor, 1);
+            js_str_c(env, "js_flag_as_constructor")) =
+                js_unnamed_func(js_flag_as_constructor, 1);
 
     // expose the utility function 'js_coroutine'
     js_newprop(env, env->shadow_obj,

@@ -13,6 +13,8 @@ function Error (message) {
                 this, message, new.target ?? Error);
 }
 
+_shadow.js_flag_as_constructor(Error);
+
 defineNotEnum(_global, 'Error', Error);
 _shadow.Error = Error; // keep a copy
 
@@ -22,9 +24,8 @@ _shadow.Error = Error; // keep a copy
 //
 // ------------------------------------------------------------
 
-const Error_prototype = Error.prototype;
-defineProperty(Error, 'prototype',
-      { value: Error_prototype, writable: false });
+const Error_prototype = {};
+defineProperty(Error, 'prototype', { value: Error_prototype });
 
 defineNotEnum(Error_prototype, 'name', 'Error');
 
@@ -69,9 +70,10 @@ function RangeError (message) {
                 this, message, new.target ?? RangeError);
 }
 
-const RangeError_prototype = RangeError.prototype;
-defineProperty(RangeError, 'prototype',
-      { value: RangeError_prototype, writable: false });
+_shadow.js_flag_as_constructor(RangeError);
+
+const RangeError_prototype = {};
+defineProperty(RangeError, 'prototype', { value: RangeError_prototype });
 
 RangeError_prototype.__proto__ = Error_prototype;
 defineNotEnum(RangeError_prototype, 'name', 'RangeError');
@@ -91,9 +93,10 @@ function ReferenceError (message) {
                 this, message, new.target ?? ReferenceError);
 }
 
-const ReferenceError_prototype = ReferenceError.prototype;
-defineProperty(ReferenceError, 'prototype',
-      { value: ReferenceError_prototype, writable: false });
+_shadow.js_flag_as_constructor(ReferenceError);
+
+const ReferenceError_prototype = {};
+defineProperty(ReferenceError, 'prototype', { value: ReferenceError_prototype });
 
 ReferenceError_prototype.__proto__ = Error_prototype;
 defineNotEnum(ReferenceError_prototype, 'name', 'ReferenceError');
@@ -113,9 +116,10 @@ function TypeError (message) {
                 this, message, new.target ?? TypeError);
 }
 
-const TypeError_prototype = TypeError.prototype;
-defineProperty(TypeError, 'prototype',
-      { value: TypeError_prototype, writable: false });
+_shadow.js_flag_as_constructor(TypeError);
+
+const TypeError_prototype = {};
+defineProperty(TypeError, 'prototype', { value: TypeError_prototype });
 
 TypeError_prototype.__proto__ = Error_prototype;
 defineNotEnum(TypeError_prototype, 'name', 'TypeError');
@@ -135,9 +139,10 @@ function SyntaxError (message) {
                 this, message, new.target ?? SyntaxError);
 }
 
-const SyntaxError_prototype = SyntaxError.prototype;
-defineProperty(SyntaxError, 'prototype',
-      { value: SyntaxError_prototype, writable: false });
+_shadow.js_flag_as_constructor(SyntaxError);
+
+const SyntaxError_prototype = {};
+defineProperty(SyntaxError, 'prototype', { value: SyntaxError_prototype });
 
 SyntaxError_prototype.__proto__ = Error_prototype;
 defineNotEnum(SyntaxError_prototype, 'name', 'SyntaxError');

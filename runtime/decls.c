@@ -13,6 +13,8 @@ static js_val js_tostring (js_environ *env, js_val val);
 //
 // ------------------------------------------------------------
 
+static js_val js_tonumber (js_environ *env, js_val val);
+
 static js_val js_num_tostring (
                     js_environ *env, js_val val, int radix);
 

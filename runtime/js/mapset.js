@@ -28,6 +28,8 @@ function Map (iterable) {
 
 defineProperty(Map, 'length', { value: 0 });
 
+_shadow.js_flag_as_constructor(Map);
+
 defineNotEnum(_global, 'Map', Map);
 _shadow.Map = Map; // keep a copy
 
@@ -49,7 +51,9 @@ defineProperty(Map, _Symbol.species, {
 //
 // ------------------------------------------------------------
 
-const Map_prototype = Map.prototype;
+const Map_prototype = {};
+defineProperty(Map, 'prototype', { value: Map_prototype });
+
 defineNotEnum(Map_prototype, 'get',     map_get);
 defineNotEnum(Map_prototype, 'set',     map_set);
 defineNotEnum(Map_prototype, 'has',     map_has);
@@ -182,6 +186,8 @@ function Set (iterable) {
 
 defineProperty(Set, 'length', { value: 0 });
 
+_shadow.js_flag_as_constructor(Set);
+
 defineNotEnum(_global, 'Set', Set);
 _shadow.Set = Set; // keep a copy
 
@@ -203,7 +209,9 @@ defineProperty(Set, _Symbol.species, {
 //
 // ------------------------------------------------------------
 
-const Set_prototype = Set.prototype;
+const Set_prototype = {};
+defineProperty(Set, 'prototype', { value: Set_prototype });
+
 defineNotEnum(Set_prototype, 'has',     set_has);
 defineNotEnum(Set_prototype, 'add',     set_add);
 defineNotEnum(Set_prototype, 'delete',  set_del);

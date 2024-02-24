@@ -10,15 +10,20 @@
 const Object = _global.Object;
 const check_obj_arg = _shadow.check_obj_arg;
 
+// ------------------------------------------------------------
 //
 // Array constructor
 //
+// ------------------------------------------------------------
 
 function Array (length) {
 
     return undefined;
 }
 
+_shadow.js_flag_as_constructor(Array);
+
+// ------------------------------------------------------------
 //
 // Array prototype
 //
@@ -26,15 +31,14 @@ function Array (length) {
 // in js_arr_init () in file arr.c. it is attached
 // to new array objects in js_newarr ().
 //
+// ------------------------------------------------------------
 
 defineNotEnum(_global, 'Array', Array);
 _shadow.Array = Array; // keep a copy
 
 const Array_prototype = ([]).__proto__;
 defineNotEnum(Array_prototype, 'constructor', Array);
-
-defineProperty(Array, 'prototype',
-    { value: Array_prototype, writable: false });
+defineProperty(Array, 'prototype', { value: Array_prototype });
 
 defineNotEnum(Array_prototype, 'concat', function concat () {});
 

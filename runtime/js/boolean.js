@@ -22,6 +22,8 @@ function Boolean (bool) {
     return bool;
 }
 
+_shadow.js_flag_as_constructor(Boolean);
+
 // ------------------------------------------------------------
 //
 // Boolean prototype
@@ -38,9 +40,7 @@ _shadow.Boolean = Boolean; // keep a copy
 const Boolean_prototype = (true).__proto__;
 _shadow.set_object_wrapper_value(Boolean_prototype, false);
 defineNotEnum(Boolean_prototype, 'constructor', Boolean);
-
-defineProperty(Boolean, 'prototype',
-      { value: Boolean_prototype, writable: false });
+defineProperty(Boolean, 'prototype', { value: Boolean_prototype });
 
 // ------------------------------------------------------------
 //
