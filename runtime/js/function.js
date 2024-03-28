@@ -125,12 +125,10 @@ const array_iterator = ([])[_Symbol.iterator];
 
 _shadow.js_arguments = function js_arguments (input_array) {
 
-    const arguments_object = {};
-
     // attach a hidden object, we don't use it, but
     // is used by Object_getSpecialTag() to identify
-    const private_state = js_private_object(
-                arguments_object, arguments_symbol, true);
+    const arguments_object = js_private_object(
+                                  arguments_symbol, true);
 
     const arguments_length = input_array.length;
     for (let i = 0; i < arguments_length; i++)
@@ -176,11 +174,16 @@ _shadow.CoroutineFunction = function CoroutineFunction (kind) {
     const wrapper_proto = new kind;
     const wrapper = function () {
 
-        const ctx = js_coroutine(
+        // wrapper replaces the input generator function
+        // (which was passed to CoroutineFunction as
+        // 'this', by js_newcoroutine (), see above.)
+        // the wrapper is returned to the caller as the
+        // function which, when called, actually creates
+        // an instance of the generator.
+        const generator = js_coroutine(
                         0x49 /* I */, wrapped, this);
-        const gen = { __proto__: wrapper_proto };
-        js_private_object(gen, kind.context_symbol, ctx);
-        return gen;
+        js_getOrSetPrototype(generator, wrapper_proto);
+        return generator;
     }
 
     // copy 'length' and 'name' from the function being wrapped
@@ -224,8 +227,6 @@ function Generator () { }
 
 _shadow.js_flag_as_constructor(Generator);
 
-const generator_context_symbol = _Symbol('generator_context_symbol');
-Generator.context_symbol = generator_context_symbol;
 Generator.wrapper_prototype = GeneratorFunction_prototype;
 
 defineProperty(Generator, 'prototype', { value: Generator_prototype });
@@ -245,9 +246,7 @@ _shadow.Generator = Generator;
 
 function Generator_next (next_val) {
 
-    const ctx = js_private_object(
-                    this, generator_context_symbol);
-    return js_coroutine(0x4E /* N */, ctx, next_val);
+    return js_coroutine(0x4E /* N */, this, next_val);
 }
 
 overrideFunctionName(Generator_next, 'next');
@@ -258,9 +257,7 @@ overrideFunctionName(Generator_next, 'next');
 
 function Generator_return (return_val) {
 
-    const ctx = js_private_object(
-                    this, generator_context_symbol);
-    return js_coroutine(0x52 /* R */, ctx, return_val);
+    return js_coroutine(0x52 /* R */, this, return_val);
 }
 
 overrideFunctionName(Generator_return, 'return');
@@ -271,9 +268,7 @@ overrideFunctionName(Generator_return, 'return');
 
 function Generator_throw (throw_val) {
 
-    const ctx = js_private_object(
-                    this, generator_context_symbol);
-    return js_coroutine(0x54 /* T */, ctx, throw_val);
+    return js_coroutine(0x54 /* T */, this, throw_val);
 }
 
 overrideFunctionName(Generator_throw, 'throw');

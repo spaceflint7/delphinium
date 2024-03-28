@@ -190,6 +190,8 @@ struct js_obj {
 #define js_obj_is_array     1
 #define js_obj_is_function  2
 #define js_obj_is_proxy     3
+#define js_obj_is_dataview  4
+#define js_obj_is_private   5
 
 js_val js_newobj (js_environ *env, const js_shape *shape, ...);
 

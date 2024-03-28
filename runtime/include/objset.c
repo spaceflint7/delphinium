@@ -49,8 +49,10 @@ struct objset {
     int32_t count;
 };
 
-#define header_size_in_entries \
-    ((sizeof(objset) * 2 - 1) / sizeof(objset_entry))
+#define header_size_in_entries                  \
+    (   (   sizeof(struct objset)               \
+          + sizeof(struct objset_entry) - 1)    \
+        /   sizeof(struct objset_entry))
 
 #define get_entry(set,index) \
     ((objset_entry *)set + (index))
@@ -368,12 +370,14 @@ void objset_delete (objset *objset, objset_id *id_ptr) {
     }
 }
 
+#endif
+
 //
 // objset_next
 //
 
 bool objset_next (const objset *objset, int *index,
-                  objset_key **key_ptr) {
+                  objset_id **id_ptr) {
 
     int next_index = *index;
     if (next_index < header_size_in_entries) {
@@ -389,14 +393,14 @@ bool objset_next (const objset *objset, int *index,
         if (!entry->next_index) {
             // end of the linked list of populated entries
             *index = objset->capacity + header_size_in_entries;
-            if (key_ptr)
-                *key_ptr = NULL;
+            if (id_ptr)
+                *id_ptr = NULL;
             return false;
         }
         if (entry->next_index < 0) {
             // we have an entry to return
-            if (key_ptr)
-                *key_ptr = entry->key_ptr;
+            if (id_ptr)
+                *id_ptr = entry->id_ptr;
             if (!(*index = ~entry->next_index))
                 *index = objset->capacity + header_size_in_entries;
             return true;
@@ -405,8 +409,6 @@ bool objset_next (const objset *objset, int *index,
         next_index = -entry->next_index;
     }
 }
-
-#endif
 
 #undef header_size_in_entries
 #undef get_entry

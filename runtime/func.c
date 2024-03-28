@@ -521,6 +521,7 @@ static js_val js_callfunc1 (
 
     // we need just two stack slots, but make extra room
     js_ensure_stack_at_least(4);
+    env->new_target = js_undefined; // fixme
 
     // per our calling convention, the link at stk_top
     // is reserved for func_val, and the link after that

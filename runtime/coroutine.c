@@ -53,6 +53,14 @@ typedef struct js_coroutine_context {
 #ifndef included_from_platform
 
 // ------------------------------------------------------------
+
+#define js_coroutine_priv_type \
+    ((js_val){ .raw = 0x434F5231 /* COR1 */ })
+
+static void js_coroutine_gc_callback (
+                js_gc_env *gc, js_priv *obj, int why);
+
+// ------------------------------------------------------------
 //
 // js_newcoroutine
 //
@@ -208,8 +216,13 @@ static js_val js_coroutine_init1 (
     env->try_handler    = try_hndlr;
     env->new_target     = new_target;
 
-    // return context address as a plain number
-    return js_make_number((double)(uintptr_t)ctx);
+    // return a new private object which points
+    // to the coroutine context
+    js_priv *priv = js_newprivobj(
+                        env, js_coroutine_priv_type);
+    priv->val_or_ptr.ptr = ctx;
+    priv->gc_callback = js_coroutine_gc_callback;
+    return js_gc_manage(env, js_make_object(priv));
 }
 
 // ------------------------------------------------------------
@@ -410,11 +423,14 @@ static js_val js_coroutine (js_c_func_args) {
         ret = js_coroutine_init1(
                     env, arg1, arg2, stk_args);
 
-    } else if (js_is_number(arg1)) {
+    } else {
 
-        js_coroutine_context *ctx =
-                (js_coroutine_context *)
-                        (uintptr_t)arg1.num;
+        js_priv *priv = js_isprivobj(
+                            arg1, js_coroutine_priv_type);
+        if (!priv)
+            js_callthrow("TypeError_incompatible_object");
+
+        js_coroutine_context *ctx = priv->val_or_ptr.ptr;
 
         // command is 'K' for Kill
         if (cmd.num == /* 0x4B */ (double)'K') {
@@ -428,6 +444,23 @@ static js_val js_coroutine (js_c_func_args) {
     }
 
     js_return(ret);
+}
+
+// ------------------------------------------------------------
+//
+// js_coroutine_gc_callback
+//
+// ------------------------------------------------------------
+
+static void js_coroutine_gc_callback (
+                js_gc_env *gc, js_priv *obj, int why) {
+
+    if (why == 0) {
+        // if notified about collection, stop coroutine
+        js_coroutine_context *ctx = obj->val_or_ptr.ptr;
+        js_coroutine_kill(ctx);
+        js_free(ctx);
+    }
 }
 
 // ------------------------------------------------------------

@@ -44,8 +44,10 @@ struct intmap {
 
 };
 
-#define header_size_in_entries \
-    ((sizeof(intmap) * 2 - 1) / sizeof(intmap_entry))
+#define header_size_in_entries                  \
+    (   (   sizeof(struct intmap)               \
+          + sizeof(struct intmap_entry) - 1)    \
+        /   sizeof(struct intmap_entry))
 
 #define get_entry(map,index) \
     ((intmap_entry *)map + (index))

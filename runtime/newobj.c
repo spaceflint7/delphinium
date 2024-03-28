@@ -353,103 +353,139 @@ js_val js_restobj (js_environ *env, js_val from_obj,
 
 // ------------------------------------------------------------
 //
+// js_newprivobj
+//
+// ------------------------------------------------------------
+
+static js_priv *js_newprivobj (
+                    js_environ *env, js_val priv_type) {
+
+    js_obj *priv_proto = (js_obj *)(
+            ((uintptr_t)env->obj_proto & (~7))
+                        | js_obj_is_private);
+    js_priv *priv_obj = js_newexobj(
+                            env, priv_proto,
+                            env->shape_empty);
+    priv_obj->type = priv_type;
+    return priv_obj;
+}
+
+// ------------------------------------------------------------
+//
+// js_isprivobj
+//
+// ------------------------------------------------------------
+
+static js_priv *js_isprivobj (
+                    js_val obj_val, js_val priv_type) {
+
+    if (js_is_object(obj_val)) {
+        js_priv *priv = js_get_pointer(obj_val);
+        if (js_obj_is_exotic(priv, js_obj_is_private)) {
+            if (priv->type.raw == priv_type.raw)
+                return priv;
+        }
+    }
+    return NULL;
+}
+
+// ------------------------------------------------------------
+//
 // js_private_object
 //
-// this utility function connects or retrieves a hidden and
-// private value that is attached to a user-visible empty
-// object.  this enables logic in runtime2.js to maintain
-// private state in object that are passed to user code.
+// this utility function creates a new private object
+// with an attached hidden value, or returns the hidden
+// value attached to a private object.
 //
-// parameter 1 is the user-visible object.
-// parameter 2 is a symbol that identifies the private data.
-// parameter 3 is the private data to attach to the object.
+// if parameter 1 is a symbol, it specifies the type of
+// the new private object which is created and returned.
+// parameter 2 specifies the hidden value to attach.
 //
-// if parameter 3 is neither undefined nor null, it is
-// attached to the user-visible object, which gets marked
-// with the symbol in parameter 2.  the user-visible object
-// must be empty, and must not have private data attached.
-//
-// if parameter 3 is undefined, the function checks if the
-// object in parameter 1 is marked with the symbol passed in
-// parameter 2, in which case it returns the private value
-// attached to the object.  otherwise, it throws an error.
-//
-// if parameter 3 is null, the function does the same as
-// above, except it returns undefined instead of throwing.
+// if parameter 1 is an object, then parameter 2 must
+// match the type of the private object, in which case
+// the hidden value is returned.  if the type does not
+// match, throws an error, unless parameter 3 is null,
+// in which case, returns undefined instead of throwing.
 //
 // ------------------------------------------------------------
 
 static js_val js_private_object (js_c_func_args) {
 
-    js_val third_arg = js_undefined;
     js_val ret_val = js_undefined;
+    bool should_throw = true;
 
     do {
 
-        // extract first parameter, the user-visible object
+        // extract first parameter and second parameters
         js_link *arg_ptr = stk_args->next;
         if (arg_ptr == js_stk_top)
             break;
-        if (!js_is_object(arg_ptr->value))
-            break;
-        js_obj *obj_ptr =
-                (js_obj *)js_get_pointer(arg_ptr->value);
+        js_val arg1 = arg_ptr->value;
 
-        // extract second parameter, the object type symbol
         arg_ptr = arg_ptr->next;
         if (arg_ptr == js_stk_top)
             break;
-        js_val private_object_type_symbol = arg_ptr->value;
+        js_val arg2 = arg_ptr->value;
 
-        // extract third parameter, the create-object flag
-        arg_ptr = arg_ptr->next;
-        if (arg_ptr != js_stk_top)
-            third_arg = arg_ptr->value;
+        if (js_is_primitive_symbol(arg1)) {
+            //
+            // create a new private exotic object
+            //
+            js_priv *priv = js_newprivobj(env, arg1);
+                /*
+            js_obj *priv_proto = (js_obj *)(
+                    ((uintptr_t)env->obj_proto & (~7))
+                                | js_obj_is_private);
+            js_priv *priv = js_newexobj(
+                                    env, priv_proto,
+                                    env->shape_empty);
+            priv->type = arg1;
+                */
+            priv->val_or_ptr.val = arg2;
+            priv->gc_callback = NULL;
 
-        if (!js_is_undefined_or_null(third_arg)) {
-
-            if (obj_ptr->shape->num_values != 0)
-                break;
-            if (obj_ptr->max_values & js_obj_not_extensible)
-                break;
-
-            if (obj_ptr->max_values > 1) {
-                // we are switching from a shape with zero
-                // values to a shape with two values, but
-                // js_shape_switch only sets one new value
-                obj_ptr->values[1] = js_deleted;
-            }
-
-            // switch to an object with two hidden values,
-            // see also shape.c
-            js_shape_switch(env, obj_ptr, 0,
-                            private_object_type_symbol,
-                            env->shape_private_object);
-
-            if (obj_ptr->shape->num_values < 2
-                    || obj_ptr->max_values < 2)
-                break;
-
-            ret_val = obj_ptr->values[1] = third_arg;
-
-        } else {
-
-            // if object has at least two values, and value[0]
-            // matches the value passed in the second paremeter,
-            // then we have a private object ref, in value[1]
-
-            if (obj_ptr->values[0].raw !=
-                            private_object_type_symbol.raw)
-                break;
-
-            ret_val = obj_ptr->values[1];
+            ret_val = js_gc_manage(env,
+                                js_make_object(priv));
+            should_throw = false;
+            break;
         }
+
+        js_priv *priv = js_isprivobj(arg1, arg2);
+        if (priv) {
+            //
+            // return hidden value
+            //
+            ret_val = priv->val_or_ptr.val;
+            should_throw = false;
+            break;
+        }
+
+        /*
+        } else if (js_is_object(arg1)) {
+            //
+            // return hidden value
+            //
+            js_priv *priv = js_get_pointer(arg1);
+            if (js_obj_is_exotic(priv, js_obj_is_private)
+                    && priv->type.raw == arg2.raw) {
+
+                ret_val = priv->val_or_ptr.val;
+                should_throw = false;
+                break;
+            }
+        }*/
+
+        // don't throw if third parameter is null
+        arg_ptr = arg_ptr->next;
+        if (arg_ptr == js_stk_top)
+            break;
+        if (arg_ptr->value.raw == js_null.raw)
+            should_throw = false;
 
     } while (0);
 
-    if (js_is_undefined_or_null(ret_val)
-                            && third_arg.raw != js_null.raw) {
-        // throw on error, except if the third parameter == null
+    if (should_throw) {
+        // throw on error
         js_callthrow("TypeError_incompatible_object");
     }
 

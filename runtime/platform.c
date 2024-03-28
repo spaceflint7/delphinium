@@ -286,6 +286,7 @@ void js_event_wait (void *event, void *mutex,
 
 // ------------------------------------------------------------
 
+/*
 void *js_lock_new () {
 
     SRWLOCK *lock = malloc(sizeof(SRWLOCK));
@@ -299,6 +300,7 @@ void js_lock_enter_shr (void *lock) { AcquireSRWLockShared(lock); }
 void js_lock_leave_shr (void *lock) { ReleaseSRWLockShared(lock); }
 void js_lock_enter_exc (void *lock) { AcquireSRWLockExclusive(lock); }
 void js_lock_leave_exc (void *lock) { ReleaseSRWLockExclusive(lock); }
+*/
 
 // ------------------------------------------------------------
 

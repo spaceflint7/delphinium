@@ -20,16 +20,16 @@ function Object (val) {
     if (typeof(val) === 'object' || typeof(val) === 'function')
         return val;
 
-    // if called as a constructor, 'this' is already
-    // a new object, otherwise create a new object
-    const new_obj = new.target ? this : {};
-
     // Object(null) or Object(undefined) returns an empty object
-    if (val === undefined || val === null)
-        return new_obj;
+    if (val === undefined || val === null) {
+
+        // if called as a constructor, 'this' is already
+        // a new object, otherwise create a new object
+        return (new.target ? this : {});
+    }
 
     // other types of primitives
-    return _shadow.create_object_wrapper(new_obj, val);
+    return _shadow.create_object_wrapper(val);
 }
 
 // ------------------------------------------------------------

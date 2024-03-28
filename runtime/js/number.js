@@ -16,8 +16,11 @@ const trunc = _shadow.math.trunc;
 //
 // ------------------------------------------------------------
 
-function Number (val) {
-    return js_num_util(val, 0x43 /* C */); // Constructor
+function Number (num) {
+    num = js_num_util(num, 0x43 /* C */); // Constructor
+    if (new.target)
+        num = _shadow.create_object_wrapper(num);
+    return num;
 }
 
 _shadow.js_flag_as_constructor(Number);
@@ -79,7 +82,13 @@ function toLocaleString () { return this.toString(); });
 // ------------------------------------------------------------
 
 defineNotEnum(Number_prototype, 'valueOf',
-function valueOf () { return +this; });
+function valueOf () {
+    if (typeof(this) === 'number')
+        return this;
+    if (this === Number_prototype)
+        return 0;
+    return _shadow.unwrap_object_wrapper(this, 'number');
+});
 
 // ------------------------------------------------------------
 //

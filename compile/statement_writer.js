@@ -100,13 +100,16 @@ function block_statement (stmt, output) {
     // inserted after all lines that did not start
     // with '!', so that all pure declarations can
     // come before any logic, see select_init_node ()
+    let extra_lines = 0;
     while (stmt.init_text.length) {
         let init_text = stmt.init_text.shift();
         if (init_text[0] === '!') {
-            output.splice(temp_index + 1, 0,
+            output.splice(temp_index + extra_lines, 0,
                           init_text.substring(1));
-        } else
+        } else {
             output.splice(temp_index, 0, init_text);
+            extra_lines++;
+        }
     }
 
     process_temp_list(stmt.temp_vals, 'js_val ', '');
@@ -543,8 +546,10 @@ function for_statement (stmt, output) {
     if (stmt_init.type === 'VariableDeclaration') {
         for (const decl of stmt_init.declarations)
             decl.skip_void_reference = true;
-        variable_declaration(stmt_init, output);
-        update_text = collect_closure_vars(stmt);
+        if (!stmt_init.is_pattern_decl) {
+            variable_declaration(stmt_init, output);
+            update_text = collect_closure_vars(stmt);
+        }
     } else
         output.push(write_expression(stmt_init, false) + ';');
 
@@ -576,9 +581,15 @@ function for_statement (stmt, output) {
     output.push(update_text + ')');
 
     if (stmt.loop_body) {
-        statement_writer(stmt.loop_body, output, true);
+        output.push('{');
+        if (stmt_init.is_pattern_decl) {
+            statement_writer(stmt_init, output);
+            for (var [var_name, var_node] of stmt_init.scope)
+                output.push(`(void)${var_node.c_name};`);
+        }
+        statement_writer(stmt.loop_body, output);
         // labeled_statement () expects the following
-        output[output.length - 1] += '//endloop';
+        output.push('}//endloop');
     } else
         output.push(';');
 
@@ -659,7 +670,7 @@ function for_statement (stmt, output) {
         const iter = 'iter_' + utils.get_unique_id();
         utils_c.insert_init_text(stmt,
             `!js_val ${iter}[3];js_newiter(env,${iter},`
-            + `'${stmt.save_type[3]}',`
+            + `'${stmt.save_type[3]}',` // 'O' or 'I'
             + write_expression(stmt.right) + ');');
 
         let decl_0;
@@ -674,6 +685,19 @@ function for_statement (stmt, output) {
                 node.kind = 'let';
             decl_0 = node.declarations[0];
             decl_0.init = null;
+
+            const decl_0_id_type = decl_0.id?.type;
+            if (    decl_0_id_type === 'ArrayPattern'
+                 || decl_0_id_type === 'ObjectPattern') {
+
+                stmt.test = `likely(${iter}[0].raw!=0)`;
+                stmt.update = `js_nextiter1(env,${iter})`;
+                node.is_pattern_decl = true;
+                decl_0.init = { type: 'Literal',
+                                c_name: `${iter}[2]`,
+                                parent_node: decl_0 };
+                return node;
+            }
 
         } else
             throw [ stmt, 'bad loop variable' ];

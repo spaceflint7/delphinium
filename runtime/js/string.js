@@ -28,7 +28,7 @@ function String (...text) {
         text = '';
 
     if (new.target)
-        text = _shadow.create_object_wrapper({}, text);
+        text = _shadow.create_object_wrapper(text);
 
     return text;
 }

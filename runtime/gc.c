@@ -63,8 +63,6 @@ struct js_gc_env {
 
 // ------------------------------------------------------------
 
-static void js_gc_mark_val (js_gc_env *gc, js_val val);
-
 static void js_gc_collect (js_gc_env *gc, bool full);
 
 // ------------------------------------------------------------
@@ -490,6 +488,12 @@ static void js_gc_mark_obj (js_gc_env *gc, js_obj *obj) {
             if (with_scope)
                 js_gc_mark_val(gc, with_scope->value);
         }
+
+    } else if (exotic_type == js_obj_is_private) {
+
+        js_priv *priv = (js_priv *)obj;
+        if (priv->gc_callback)
+            priv->gc_callback(gc, priv, js_gc_marked_bit);
     }
 }
 
@@ -679,9 +683,18 @@ static void js_gc_run_sweep (js_gc_env *gc) {
             } else
                 js_free(elem);
 
-            // delete the value
-            // xxx complex object delete
             void *ptr = js_get_pointer(val);
+
+            // gc callback for private objects
+            if (js_is_object(val) &&
+                        js_obj_is_exotic(
+                            ptr, js_obj_is_private)) {
+                js_priv *priv = ptr;
+                if (priv->gc_callback)
+                    priv->gc_callback(gc, priv, 0);
+            }
+
+            // delete the value
             *(volatile uint32_t *)ptr = 0xDEADF00D;
             js_free(ptr);
         }

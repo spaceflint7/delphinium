@@ -75,3 +75,20 @@ let f3obj = new f3(678);
 console.log(f3obj);
 
 })()
+
+//
+// third test:  new constructors and primitive values
+//
+
+console.log('==========================================');
+
+(function () {
+
+console.log(Boolean.prototype.valueOf(),
+            Boolean(0), Boolean(1),
+            new Boolean(0), new Boolean(1),
+            Number(123).valueOf(),
+            new Number(123).valueOf(),
+            new Object(123).valueOf());
+
+})()

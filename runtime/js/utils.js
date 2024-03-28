@@ -52,9 +52,9 @@ array_like_iterator_prototype.next = function () {
 
 _shadow.create_array_like_iterator = function (source, type_symbol) {
 
-    const iterator_object = {};
-    const private_state = js_private_object(
-                                iterator_object, type_symbol, {});
+    const private_state = {};
+    const iterator_object =
+            js_private_object(type_symbol, private_state);
     private_state.__proto__ = array_like_iterator_prototype;
     private_state.array = source;
     private_state.length = source.length;
@@ -72,22 +72,12 @@ const object_wrapper_symbol = Symbol('object_wrapper');
 
 // ------------------------------------------------------------
 
-_shadow.set_object_wrapper_value =
-function set_object_wrapper_value (obj, value) {
-
-    // just attach a value as private state, without
-    // changing the prototype.  used for Boolean.prototype.
-    js_private_object(obj, object_wrapper_symbol, value);
-}
-
-// ------------------------------------------------------------
-
 _shadow.create_object_wrapper =
-function create_object_wrapper (obj, primitiveValue) {
+function create_object_wrapper (primitiveValue) {
 
     // attach the primitive value as private state
-    js_private_object(
-            obj, object_wrapper_symbol, primitiveValue);
+    const obj = js_private_object(
+                    object_wrapper_symbol, primitiveValue);
 
     // set the prototype of the new object to
     // the prototype of the input primitive value

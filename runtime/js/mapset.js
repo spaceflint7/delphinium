@@ -16,14 +16,17 @@ const js_map_util = _shadow.js_map_util;
 //
 // ------------------------------------------------------------
 
-const map_symbol = _Symbol('map');
-
-function Map (iterable) {
+const Map = function Map (iterable) {
 
     if (!new.target)
         _shadow.TypeError_constructor_requires_new('Map');
-    const map = js_map_util(0x43 /* C */, iterable);
-    js_private_object(this, map_symbol, map);
+    const map = js_map_util(0x4331 /* C1 */,
+                            Map.prototype);
+    if (iterable === undefined || iterable === null)
+        return map;
+    for (const entries of iterable)
+        map.set(entries[0], entries[1]);
+    return map;
 }
 
 defineProperty(Map, 'length', { value: 0 });
@@ -82,10 +85,11 @@ defineNotEnum(map_iterator_prototype, 'next', function next () {
 defineConfig(map_iterator_prototype, _Symbol.toStringTag, 'Map Iterator');
 
 function map_entries () {
-    const map = js_private_object(this, map_symbol);
+    js_map_util(0x4E31 /* N1 */, this); // type check
     const iterator_object =
                 create_map_or_set_iterator(
-                    map_iterator_symbol, map);
+                    map_iterator_symbol, this,
+                    0x4931 /* I1 */);
     iterator_object.__proto__ = map_iterator_prototype;
     return iterator_object;
 }
@@ -131,34 +135,28 @@ overrideFunctionName(map_foreach, 'foreach');
 // ------------------------------------------------------------
 
 function map_get (key) {
-    const map = js_private_object(this, map_symbol);
-    return js_map_util(0x47 /* G */, map, key);
+    return js_map_util(0x4731 /* G1 */, this, key);
 }
 
 function map_set (key, val) {
-    const map = js_private_object(this, map_symbol);
-    js_map_util(0x53 /* S */, map, key, val);
+    js_map_util(0x5331 /* S1 */, this, key, val);
     return this;
 }
 
 function map_has (key) {
-    const map = js_private_object(this, map_symbol);
-    return js_map_util(0x46 /* H */, map, key);
+    return js_map_util(0x4631 /* H1 */, this, key);
 }
 
 function map_del (key) {
-    const map = js_private_object(this, map_symbol);
-    return js_map_util(0x52 /* R */, map, key);
+    return js_map_util(0x5231 /* R */, this, key);
 }
 
 function map_clr () {
-    const map = js_private_object(this, map_symbol);
-    js_map_util(0x45 /* E */, map);
+    js_map_util(0x4531 /* E */, this);
 }
 
 function map_siz () {
-    const map = js_private_object(this, map_symbol);
-    return js_map_util(0x4E /* N */, map);
+    return js_map_util(0x4E31 /* N */, this);
 }
 
 overrideFunctionName(map_get, 'get');
@@ -174,14 +172,17 @@ overrideFunctionName(map_siz, 'get size');
 //
 // ------------------------------------------------------------
 
-const set_symbol = _Symbol('set');
-
-function Set (iterable) {
+const Set = function Set (iterable) {
 
     if (!new.target)
         _shadow.TypeError_constructor_requires_new('Set');
-    const set = js_map_util(0x43 /* C */, iterable);
-    js_private_object(this, set_symbol, set);
+    const set = js_map_util(0x4332 /* C2 */,
+                            Set.prototype);
+    if (iterable === undefined || iterable === null)
+        return set;
+    for (const key of iterable)
+        set.add(key);
+    return set;
 }
 
 defineProperty(Set, 'length', { value: 0 });
@@ -239,10 +240,11 @@ defineNotEnum(set_iterator_prototype, 'next', function next () {
 defineConfig(set_iterator_prototype, _Symbol.toStringTag, 'Set Iterator');
 
 function set_entries () {
-    const map = js_private_object(this, set_symbol);
+    js_map_util(0x4E32 /* N2 */, this); // type check
     const iterator_object =
                 create_map_or_set_iterator(
-                    set_iterator_symbol, map);
+                    set_iterator_symbol, this,
+                    0x4932 /* I2 */);
     iterator_object.__proto__ = set_iterator_prototype;
     return iterator_object;
 }
@@ -288,29 +290,24 @@ overrideFunctionName(set_foreach, 'foreach');
 // ------------------------------------------------------------
 
 function set_has (key) {
-    const map = js_private_object(this, set_symbol);
-    return js_map_util(0x46 /* H */, map, key);
+    return js_map_util(0x4632 /* H2 */, this, key);
 }
 
 function set_add (key) {
-    const map = js_private_object(this, set_symbol);
-    js_map_util(0x53 /* S */, map, key, key);
+    js_map_util(0x5332 /* S2 */, this, key, 0);
     return this;
 }
 
 function set_del (key) {
-    const map = js_private_object(this, set_symbol);
-    return js_map_util(0x52 /* R */, map, key);
+    return js_map_util(0x5232 /* R2 */, this, key);
 }
 
 function set_clr () {
-    const map = js_private_object(this, set_symbol);
-    js_map_util(0x45 /* E */, map);
+    js_map_util(0x4532 /* E2 */, this);
 }
 
 function set_siz () {
-    const map = js_private_object(this, set_symbol);
-    return js_map_util(0x4E /* N */, map);
+    return js_map_util(0x4E32 /* N2 */, this);
 }
 
 overrideFunctionName(set_has, 'has');
@@ -326,11 +323,11 @@ overrideFunctionName(set_siz, 'get size');
 // ------------------------------------------------------------
 
 function create_map_or_set_iterator (
-                        type_symbol, map_or_set_obj) {
+            type_symbol, map_or_set_obj, map_or_set_cmd) {
 
-    const iterator_object = {};
-    const ctx = js_private_object(
-                    iterator_object, type_symbol, []);
+    const ctx = [];
+    const iterator_object =
+            js_private_object(type_symbol, ctx);
     // ctx[0] is internal iteration index,
     // which is set to -1 when iteration is done
     //
@@ -344,16 +341,19 @@ function create_map_or_set_iterator (
     //          1 for just key
     //          2 for just value
     //          3 for [ key, value ]
+    //
+    // ctx[5] is the 'I0' .. 'I3' command
     ctx[0] = 0;
     ctx[3] = map_or_set_obj;
     ctx[4] = 3; // default to [ key, value ]
+    ctx[5] = map_or_set_cmd;
     return iterator_object;
 }
 
 function map_or_set_iterator_next (ctx) {
 
     if (ctx[0] >= 0) {
-        if (!js_map_util(0x49 /* I */, ctx[3], ctx))
+        if (!js_map_util(ctx[5], ctx[3], ctx))
             ctx[0] = -1;
     }
 

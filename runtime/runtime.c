@@ -32,13 +32,6 @@
 #define js_descr_enum   0x10
 #define js_descr_config 0x20
 
-// return size of exotic object structure
-#define js_obj_struct_size(exotic_type)                         \
-    (   (exotic_type) == js_obj_is_ordinary ? sizeof(js_obj)    \
-      : (exotic_type) == js_obj_is_array    ? sizeof(js_arr)    \
-      : (exotic_type) == js_obj_is_function ? sizeof(js_func)   \
-      : -999999)
-
 // number of properties to create in advance on an empty
 // object in js_newexobj (), and number of properties to
 // add in advance when shape changes in js_shape_switch ()
@@ -128,7 +121,6 @@ struct js_environ {
     js_try *try_handler;
     js_val shadow_obj;
     objset *strings_set;
-    js_shape *shape_private_object;
     js_val obj_constructor; // Object constructor
 
     js_obj *obj_proto;      // Object.prototype
@@ -169,6 +161,24 @@ struct js_environ {
 
     // coroutines
     struct js_coroutine_context *coroutine_contexts;
+};
+
+// ------------------------------------------------------------
+//
+// private exotic object type
+//
+// ------------------------------------------------------------
+
+typedef struct js_priv js_priv;
+struct js_priv {
+
+    js_obj super;
+    js_val type;
+    union {
+        js_val val;
+        void *ptr;
+    } val_or_ptr;
+    void (*gc_callback)(js_gc_env *, js_priv *, int);
 };
 
 // ------------------------------------------------------------

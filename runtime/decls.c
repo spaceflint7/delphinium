@@ -134,6 +134,8 @@ static void js_gc_notify (js_environ *env, js_val val);
 
 static void js_gc_free (js_environ *env, void *ptr);
 
+static void js_gc_mark_val (js_gc_env *gc, js_val val);
+
 // ------------------------------------------------------------
 //
 // platform

@@ -52,9 +52,10 @@ objset_id *objset_search (const objset *objset,
 // deletes the specified id from the objset.
 void objset_delete (objset *objset, objset_id *id);
 
+#endif
+
 // enumerate the object set.  set index <= 0 on first
 // call, and keep calling while the return value is true.
 bool objset_next (const objset *objset, int *index,
                   objset_id **id_ptr);
 
-#endif

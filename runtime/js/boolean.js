@@ -17,7 +17,7 @@ function Boolean (bool) {
 
     bool = bool ? true : false;
     if (new.target)
-        bool = _shadow.create_object_wrapper({}, bool);
+        bool = _shadow.create_object_wrapper(bool);
 
     return bool;
 }
@@ -38,7 +38,6 @@ defineNotEnum(_global, 'Boolean', Boolean);
 _shadow.Boolean = Boolean; // keep a copy
 
 const Boolean_prototype = (true).__proto__;
-_shadow.set_object_wrapper_value(Boolean_prototype, false);
 defineNotEnum(Boolean_prototype, 'constructor', Boolean);
 defineProperty(Boolean, 'prototype', { value: Boolean_prototype });
 
@@ -62,6 +61,8 @@ function toString () {
 
 defineNotEnum(Boolean_prototype, 'valueOf',
 function valueOf () {
+    if (this === Boolean_prototype)
+        return false;
     return _shadow.unwrap_object_wrapper(this, 'boolean');
 });
 

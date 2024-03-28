@@ -1,5 +1,13 @@
 'use strict';
 
+// ------------------------------------------------------------
+//
+// array
+//
+// ------------------------------------------------------------
+
+;(function () {
+
 // test that a set-property operation converts
 // deleted/empty cells to the undefined value
 let arr = [];
@@ -41,3 +49,44 @@ var q1, q2, q3;
 [q1, q2, q3] = arr;
 console.log(q1, q2, q3);
 console.log(...arr);
+
+})();
+
+// ------------------------------------------------------------
+//
+// map
+//
+// ------------------------------------------------------------
+
+;(function () {
+
+    var m = new Map([
+      [123,  ' '+'abc' ],
+      [123n, ' '+'ABC' ],
+      [-0,   ' '+'ZERO'],
+    ]);
+    for (let [k, v] of m)
+        console.log('MAP KEY',k,'VALUE<',v,'>');
+    for (let k of m)
+        console.log('MAP KEY',k);
+    for (let v of m)
+        console.log('MAP VALUE<',v,'>');
+
+})();
+
+
+// ------------------------------------------------------------
+//
+// set
+//
+// ------------------------------------------------------------
+
+;(function () {
+
+    var s = new Set([ 123, 123n, -0 ]);
+    for (let k of s)
+        console.log('SET KEY',k);
+    for (let v of s)
+        console.log('SET VALUE<',v,'>');
+
+})();

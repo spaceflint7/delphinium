@@ -32,6 +32,13 @@ struct js_shape {
 #define js_obj_flags_mask (js_obj_not_extensible \
     | js_gc_marked_bit | js_gc_notify_bit)
 
+// return size of exotic object structure
+#define js_obj_struct_size(exotic_ty) (                 \
+    (exotic_ty) == js_obj_is_array    ? sizeof(js_arr)  \
+  : (exotic_ty) == js_obj_is_function ? sizeof(js_func) \
+  : (exotic_ty) == js_obj_is_private  ? sizeof(js_priv) \
+                                      : sizeof(js_obj))
+
 // ------------------------------------------------------------
 //
 // js_shape_key
@@ -301,13 +308,4 @@ static void js_shape_init (js_environ *env) {
     shape->unique_id = ++env->next_unique_id;
     shape->num_values = 0;
     env->shape_empty = shape;
-
-    // create a shape with room for two properties
-    // without access keys, see js_private_object ()
-
-    shape = js_malloc(sizeof(js_shape));
-    shape->props = js_check_alloc(intmap_create());
-    shape->unique_id = ++env->next_unique_id;
-    shape->num_values = 2;
-    env->shape_private_object = shape;
 }
